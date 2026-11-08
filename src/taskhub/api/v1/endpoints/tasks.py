@@ -12,11 +12,11 @@ router = APIRouter()
     response_model=TaskResponse,
     summary="Get task details by ID",
 )
-def get_task(
+async def get_task(
     task_id: int,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    task = service.get_task(task_id=task_id)
+    task = await service.get_task(task_id=task_id)
     return TaskResponse.model_validate(task)
 
 
@@ -25,12 +25,12 @@ def get_task(
     response_model=TaskResponse,
     summary="Partially update a task",
 )
-def update_task(
+async def update_task(
     task_id: int,
     task_in: TaskUpdate,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    task = service.update_task(task_id=task_id, task_in=task_in)
+    task = await service.update_task(task_id=task_id, task_in=task_in)
     return TaskResponse.model_validate(task)
 
 
@@ -39,9 +39,9 @@ def update_task(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a task by ID",
 )
-def delete_task(
+async def delete_task(
     task_id: int,
     service: TaskService = Depends(get_task_service),
 ) -> Response:
-    service.delete_task(task_id=task_id)
+    await service.delete_task(task_id=task_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

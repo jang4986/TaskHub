@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from taskhub.api.v1.router import api_router
 from taskhub.core.config import settings
+from taskhub.db.session import engine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up %s...", settings.PROJECT_NAME)
     yield
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
+    await engine.dispose()
 
 
 app = FastAPI(
