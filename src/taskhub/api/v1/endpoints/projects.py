@@ -14,12 +14,12 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Create a task for a project",
 )
-def create_task_for_project(
+async def create_task_for_project(
     project_id: int,
     task_in: TaskCreate,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    task = service.create_task(project_id=project_id, task_in=task_in)
+    task = await service.create_task(project_id=project_id, task_in=task_in)
     return TaskResponse.model_validate(task)
 
 
@@ -28,7 +28,7 @@ def create_task_for_project(
     response_model=list[TaskResponse],
     summary="List tasks of a project with pagination and filters",
 )
-def list_tasks_for_project(
+async def list_tasks_for_project(
     project_id: int,
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(20, ge=1, le=100, description="Max number of items to return"),
@@ -36,7 +36,7 @@ def list_tasks_for_project(
     priority: Optional[TaskPriority] = Query(None, description="Filter by priority"),
     service: TaskService = Depends(get_task_service),
 ) -> list[TaskResponse]:
-    tasks = service.get_project_tasks(
+    tasks = await service.get_project_tasks(
         project_id=project_id,
         skip=skip,
         limit=limit,

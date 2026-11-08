@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "TaskHub — Hệ thống quản lý công việc (Task Management API)"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = True
+    DATABASE_URL: str = "sqlite+aiosqlite:///./taskhub.db"
 
 
 settings = Settings()

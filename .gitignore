@@ -5,8 +5,16 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
 
 # Virtual environments
 .venv
 .env
+
 /tests/
+AGENTS.md
+
+# Database
+*.db
+*.sqlite
+*.sqlite3

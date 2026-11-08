@@ -1,3 +1,4 @@
-from taskhub.repositories.task_repo import TaskRepository, fake_tasks_db
+from taskhub.repositories.base import BaseRepository
+from taskhub.repositories.task_repo import TaskRepository
 
-__all__ = ["TaskRepository", "fake_tasks_db"]
+__all__ = ["BaseRepository", "TaskRepository"]
