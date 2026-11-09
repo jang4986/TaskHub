@@ -2,9 +2,10 @@ from typing import Optional, Union
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from taskhub.enums.common import TaskPriority, TaskStatus
 from taskhub.models.task import Task
 from taskhub.repositories.base import BaseRepository
-from taskhub.schemas.task import TaskCreate, TaskPriority, TaskStatus, TaskUpdate
+from taskhub.schemas.task import TaskCreate, TaskUpdate
 
 
 class TaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
