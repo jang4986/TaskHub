@@ -6,6 +6,14 @@ from taskhub.schemas.task import (
     TaskStatus,
     TaskUpdate,
 )
+from taskhub.schemas.token import Token, TokenPayload
+from taskhub.schemas.user import (
+    UserBase,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    UserUpdate,
+)
 
 __all__ = [
     "TaskBase",
@@ -14,4 +22,11 @@ __all__ = [
     "TaskResponse",
     "TaskStatus",
     "TaskPriority",
+    "Token",
+    "TokenPayload",
+    "UserBase",
+    "UserCreate",
+    "UserUpdate",
+    "UserResponse",
+    "UserLogin",
 ]
