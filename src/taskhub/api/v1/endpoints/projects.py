@@ -1,7 +1,8 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, status
 
-from taskhub.api.deps import get_task_service
+from taskhub.api.deps import get_current_active_user, get_task_service
+from taskhub.models.user import User
 from taskhub.schemas.task import TaskCreate, TaskPriority, TaskResponse, TaskStatus
 from taskhub.services.task_service import TaskService
 
@@ -17,8 +18,10 @@ router = APIRouter()
 async def create_task_for_project(
     project_id: int,
     task_in: TaskCreate,
+    current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
+    task_in.created_by = current_user.id
     task = await service.create_task(project_id=project_id, task_in=task_in)
     return TaskResponse.model_validate(task)
 
@@ -34,6 +37,7 @@ async def list_tasks_for_project(
     limit: int = Query(20, ge=1, le=100, description="Max number of items to return"),
     status: Optional[TaskStatus] = Query(None, description="Filter by status"),
     priority: Optional[TaskPriority] = Query(None, description="Filter by priority"),
+    current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
 ) -> list[TaskResponse]:
     tasks = await service.get_project_tasks(

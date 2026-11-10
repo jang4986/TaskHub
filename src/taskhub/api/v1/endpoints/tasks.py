@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 
-from taskhub.api.deps import get_task_service
+from taskhub.api.deps import get_current_active_user, get_task_service
+from taskhub.models.user import User
 from taskhub.schemas.task import TaskResponse, TaskUpdate
 from taskhub.services.task_service import TaskService
 
@@ -14,6 +15,7 @@ router = APIRouter()
 )
 async def get_task(
     task_id: int,
+    current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
     task = await service.get_task(task_id=task_id)
@@ -28,6 +30,7 @@ async def get_task(
 async def update_task(
     task_id: int,
     task_in: TaskUpdate,
+    current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
     task = await service.update_task(task_id=task_id, task_in=task_in)
@@ -41,6 +44,7 @@ async def update_task(
 )
 async def delete_task(
     task_id: int,
+    current_user: User = Depends(get_current_active_user),
     service: TaskService = Depends(get_task_service),
 ) -> Response:
     await service.delete_task(task_id=task_id)

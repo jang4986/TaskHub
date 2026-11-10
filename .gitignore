@@ -8,11 +8,9 @@ wheels/
 .pytest_cache/
 
 # Virtual environments
+AGENTS.md
 .venv
 .env
-
-/tests/
-AGENTS.md
 
 # Database
 *.db

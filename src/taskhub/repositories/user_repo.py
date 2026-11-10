@@ -1,12 +1,13 @@
-from typing import Any, Optional
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskhub.models.user import User
 from taskhub.repositories.base import BaseRepository
+from taskhub.schemas.user import UserCreate, UserUpdate
 
 
-class UserRepository(BaseRepository[User, Any, Any]):
+class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(model=User, db=db)
 
