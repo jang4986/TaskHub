@@ -1,21 +1,8 @@
 from datetime import datetime
-from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class TaskStatus(str, Enum):
-    TODO = "TODO"
-    IN_PROGRESS = "IN_PROGRESS"
-    IN_REVIEW = "IN_REVIEW"
-    DONE = "DONE"
-
-
-class TaskPriority(str, Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    URGENT = "URGENT"
+from taskhub.enums.common import TaskPriority, TaskStatus
 
 
 class TaskBase(BaseModel):
@@ -47,3 +34,13 @@ class TaskResponse(TaskBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+__all__ = [
+    "TaskStatus",
+    "TaskPriority",
+    "TaskBase",
+    "TaskCreate",
+    "TaskUpdate",
+    "TaskResponse",
+]
