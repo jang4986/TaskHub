@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from taskhub.enums.common import TaskPriority, TaskStatus
+from taskhub.core.enums import TaskPriority, TaskStatus
 
 
 class TaskBase(BaseModel):
@@ -15,7 +15,7 @@ class TaskBase(BaseModel):
 
 
 class TaskCreate(TaskBase):
-    created_by: Optional[int] = Field(default=1, description="ID của người tạo task")
+    pass
 
 
 class TaskUpdate(BaseModel):

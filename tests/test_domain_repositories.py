@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from taskhub.enums.common import NotificationType, ProjectStatus, TaskPriority, TaskStatus, UserRole, WorkspaceRole
+from taskhub.core.enums import NotificationType, ProjectStatus, TaskPriority, TaskStatus, UserRole, WorkspaceRole
 from taskhub.models.comment import Comment
 from taskhub.models.label import Label
 from taskhub.models.notification import Notification
@@ -33,7 +33,7 @@ async def test_full_domain_models_and_repositories():
         # 1. User
         user = await user_repo.get_by_email("user1@example.com")
         assert user is not None
-        assert user.role == UserRole.MEMBER.value
+        assert user.role == UserRole.MEMBER
 
         # 2. Workspace
         workspaces = await ws_repo.get_by_owner(owner_id=user.id)
@@ -41,9 +41,12 @@ async def test_full_domain_models_and_repositories():
         ws = workspaces[0]
 
         # 3. Workspace Member
-        member = WorkspaceMember(workspace_id=ws.id, user_id=2, role=WorkspaceRole.MEMBER.value)
-        session.add(member)
-        await session.flush()
+        member = await session.get(WorkspaceMember, (ws.id, 2))
+        if member is None:
+            member = WorkspaceMember(workspace_id=ws.id, user_id=2, role=WorkspaceRole.MEMBER.value)
+            session.add(member)
+            await session.flush()
+        assert member.role == WorkspaceRole.MEMBER.value
 
         # 4. Project
         projects = await proj_repo.get_by_workspace(workspace_id=ws.id)
@@ -56,8 +59,8 @@ async def test_full_domain_models_and_repositories():
             "assignee_id": 2,
             "title": "Build Architecture",
             "description": "Layered architecture implementation",
-            "status": TaskStatus.TODO.value,
-            "priority": TaskPriority.HIGH.value,
+            "status": TaskStatus.TODO,
+            "priority": TaskPriority.HIGH,
             "created_by": user.id,
         })
         assert task_created.id is not None

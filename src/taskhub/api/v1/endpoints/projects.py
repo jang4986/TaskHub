@@ -1,10 +1,10 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Query, Response, status
 
-from taskhub.api.deps import get_current_active_user, get_task_service
-from taskhub.models.user import User
-from taskhub.schemas.task import TaskCreate, TaskPriority, TaskResponse, TaskStatus
-from taskhub.services.task_service import TaskService
+from taskhub.api.deps import CurrentActiveUser, TaskServ
+from taskhub.core.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+from taskhub.core.enums import TaskPriority, TaskStatus
+from taskhub.schemas.task import TaskCreate, TaskResponse
 
 router = APIRouter()
 
@@ -18,11 +18,15 @@ router = APIRouter()
 async def create_task_for_project(
     project_id: int,
     task_in: TaskCreate,
-    current_user: User = Depends(get_current_active_user),
-    service: TaskService = Depends(get_task_service),
+    current_user: CurrentActiveUser,
+    service: TaskServ,
 ) -> TaskResponse:
-    task_in.created_by = current_user.id
-    task = await service.create_task(project_id=project_id, task_in=task_in)
+    task = await service.create_task(
+        project_id=project_id,
+        created_by=current_user.id,
+        task_in=task_in,
+        current_user=current_user,
+    )
     return TaskResponse.model_validate(task)
 
 
@@ -33,18 +37,26 @@ async def create_task_for_project(
 )
 async def list_tasks_for_project(
     project_id: int,
+    response: Response,
+    current_user: CurrentActiveUser,
+    service: TaskServ,
     skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Max number of items to return"),
+    limit: int = Query(
+        DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=MAX_PAGE_SIZE,
+        description="Max number of items to return",
+    ),
     status: Optional[TaskStatus] = Query(None, description="Filter by status"),
     priority: Optional[TaskPriority] = Query(None, description="Filter by priority"),
-    current_user: User = Depends(get_current_active_user),
-    service: TaskService = Depends(get_task_service),
 ) -> list[TaskResponse]:
-    tasks = await service.get_project_tasks(
+    tasks, total = await service.get_project_tasks(
         project_id=project_id,
+        current_user=current_user,
         skip=skip,
         limit=limit,
         status_filter=status,
         priority_filter=priority,
     )
+    response.headers["X-Total-Count"] = str(total)
     return [TaskResponse.model_validate(t) for t in tasks]
