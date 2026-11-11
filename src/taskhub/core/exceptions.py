@@ -1,5 +1,5 @@
 """Domain-specific HTTP exceptions for TaskHub."""
-from typing import Optional
+
 from fastapi import HTTPException, status
 
 
@@ -20,7 +20,7 @@ class ProjectNotFoundError(HTTPException):
 
 
 class UserNotFoundError(HTTPException):
-    def __init__(self, user_id: Optional[int] = None):
+    def __init__(self, user_id: int | None = None):
         detail = f"User with id {user_id} not found" if user_id is not None else "User not found"
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,

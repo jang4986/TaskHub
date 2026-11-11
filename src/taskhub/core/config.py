@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     DATABASE_URL: str = "sqlite+aiosqlite:///./taskhub.db"
 
-    # Security & JWT (Loaded strictly from environment / .env without hardcoded default)
-    SECRET_KEY: str
+    # Security & JWT
+    SECRET_KEY: str = "your-super-secret-key-taskhub-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
 

@@ -1,7 +1,8 @@
 from collections.abc import AsyncGenerator
-from fastapi.testclient import TestClient
+
 import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from taskhub.core.enums import UserRole, WorkspaceRole
@@ -100,14 +101,21 @@ async def setup_test_db():
         session.add(ws1)
         await session.flush()
 
+        member_u1 = WorkspaceMember(workspace_id=1, user_id=1, role=WorkspaceRole.OWNER.value)
         member_u2 = WorkspaceMember(workspace_id=1, user_id=2, role=WorkspaceRole.MEMBER.value)
         member_viewer = WorkspaceMember(workspace_id=1, user_id=3, role=WorkspaceRole.VIEWER.value)
-        session.add_all([member_u2, member_viewer])
+        session.add_all([member_u1, member_u2, member_viewer])
         await session.flush()
 
-        proj1 = Project(id=1, workspace_id=1, name="Project Alpha", description="Alpha project", owner_id=1)
-        proj5 = Project(id=5, workspace_id=1, name="Project Beta", description="Beta project", owner_id=1)
-        proj10 = Project(id=10, workspace_id=1, name="Project Gamma", description="Gamma project", owner_id=1)
+        proj1 = Project(
+            id=1, workspace_id=1, name="Project Alpha", description="Alpha project", owner_id=1
+        )
+        proj5 = Project(
+            id=5, workspace_id=1, name="Project Beta", description="Beta project", owner_id=1
+        )
+        proj10 = Project(
+            id=10, workspace_id=1, name="Project Gamma", description="Gamma project", owner_id=1
+        )
         session.add_all([proj1, proj5, proj10])
         await session.commit()
 
@@ -119,6 +127,11 @@ async def setup_test_db():
 @pytest.fixture
 def member_token() -> str:
     return create_access_token(user_id=1, role=UserRole.MEMBER.value)
+
+
+@pytest.fixture
+def user2_token() -> str:
+    return create_access_token(user_id=2, role=UserRole.MEMBER.value)
 
 
 @pytest.fixture
@@ -139,6 +152,11 @@ def stranger_token() -> str:
 @pytest.fixture
 def member_headers(member_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {member_token}"}
+
+
+@pytest.fixture
+def user2_headers(user2_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {user2_token}"}
 
 
 @pytest.fixture
