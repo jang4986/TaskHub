@@ -1,9 +1,7 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Response, status
 
-from taskhub.api.deps import get_current_active_user, get_task_service
-from taskhub.models.user import User
+from taskhub.api.deps import CurrentActiveUser, TaskServ
 from taskhub.schemas.task import TaskResponse, TaskUpdate
-from taskhub.services.task_service import TaskService
 
 router = APIRouter()
 
@@ -15,10 +13,10 @@ router = APIRouter()
 )
 async def get_task(
     task_id: int,
-    current_user: User = Depends(get_current_active_user),
-    service: TaskService = Depends(get_task_service),
+    current_user: CurrentActiveUser,
+    service: TaskServ,
 ) -> TaskResponse:
-    task = await service.get_task(task_id=task_id)
+    task = await service.get_task(task_id=task_id, current_user=current_user)
     return TaskResponse.model_validate(task)
 
 
@@ -30,10 +28,14 @@ async def get_task(
 async def update_task(
     task_id: int,
     task_in: TaskUpdate,
-    current_user: User = Depends(get_current_active_user),
-    service: TaskService = Depends(get_task_service),
+    current_user: CurrentActiveUser,
+    service: TaskServ,
 ) -> TaskResponse:
-    task = await service.update_task(task_id=task_id, task_in=task_in)
+    task = await service.update_task(
+        task_id=task_id,
+        task_in=task_in,
+        current_user=current_user,
+    )
     return TaskResponse.model_validate(task)
 
 
@@ -44,8 +46,8 @@ async def update_task(
 )
 async def delete_task(
     task_id: int,
-    current_user: User = Depends(get_current_active_user),
-    service: TaskService = Depends(get_task_service),
+    current_user: CurrentActiveUser,
+    service: TaskServ,
 ) -> Response:
-    await service.delete_task(task_id=task_id)
+    await service.delete_task(task_id=task_id, current_user=current_user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from taskhub.enums.common import ProjectStatus
+from taskhub.core.enums import ProjectStatus
 from taskhub.models.base import Base
 
 if TYPE_CHECKING:
@@ -47,6 +47,7 @@ class Project(Base):
         "Task",
         back_populates="project",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     labels: Mapped[list["Label"]] = relationship(
         "Label",

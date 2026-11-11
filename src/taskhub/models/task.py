@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from taskhub.enums.common import TaskPriority, TaskStatus
+from taskhub.core.enums import TaskPriority, TaskStatus
 from taskhub.models.base import Base
 
 if TYPE_CHECKING:
@@ -25,17 +25,21 @@ class Task(Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(50), default=TaskStatus.TODO.value, nullable=False
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(TaskStatus, name="task_status", native_enum=False),
+        default=TaskStatus.TODO,
+        nullable=False,
     )
-    priority: Mapped[str] = mapped_column(
-        String(50), default=TaskPriority.MEDIUM.value, nullable=False
+    priority: Mapped[TaskPriority] = mapped_column(
+        Enum(TaskPriority, name="task_priority", native_enum=False),
+        default=TaskPriority.MEDIUM,
+        nullable=False,
     )
     due_date: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_by: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, index=True
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

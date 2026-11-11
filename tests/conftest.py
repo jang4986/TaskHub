@@ -4,14 +4,15 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from taskhub.core.enums import UserRole, WorkspaceRole
 from taskhub.core.security import create_access_token, get_password_hash
 from taskhub.db.session import get_db
-from taskhub.enums.common import UserRole
 from taskhub.main import app
 from taskhub.models.base import Base
 from taskhub.models.project import Project
 from taskhub.models.user import User
 from taskhub.models.workspace import Workspace
+from taskhub.models.workspace_member import WorkspaceMember
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -28,10 +29,11 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
     async with TestingSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
+        finally:
+            await session.close()
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -41,14 +43,14 @@ async def setup_test_db():
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
-    # Seed initial test data: Users, Workspaces, and Projects
+    # Seed initial test data: Users, Workspaces, Members, and Projects
     async with TestingSessionLocal() as session:
         user1 = User(
             id=1,
             email="user1@example.com",
             full_name="User One",
             hashed_password=get_password_hash("password123"),
-            role=UserRole.MEMBER.value,
+            role=UserRole.MEMBER,
             is_active=True,
         )
         user2 = User(
@@ -56,7 +58,23 @@ async def setup_test_db():
             email="user2@example.com",
             full_name="User Two",
             hashed_password=get_password_hash("password123"),
-            role=UserRole.MEMBER.value,
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+        viewer_user = User(
+            id=3,
+            email="viewer@example.com",
+            full_name="Viewer User",
+            hashed_password=get_password_hash("password123"),
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
+        stranger_user = User(
+            id=4,
+            email="stranger@example.com",
+            full_name="Stranger User",
+            hashed_password=get_password_hash("password123"),
+            role=UserRole.MEMBER,
             is_active=True,
         )
         admin_user = User(
@@ -64,7 +82,7 @@ async def setup_test_db():
             email="admin@example.com",
             full_name="Admin User",
             hashed_password=get_password_hash("adminpassword123"),
-            role=UserRole.ADMIN.value,
+            role=UserRole.ADMIN,
             is_active=True,
         )
         inactive_user = User(
@@ -72,14 +90,19 @@ async def setup_test_db():
             email="inactive@example.com",
             full_name="Inactive User",
             hashed_password=get_password_hash("password123"),
-            role=UserRole.MEMBER.value,
+            role=UserRole.MEMBER,
             is_active=False,
         )
-        session.add_all([user1, user2, admin_user, inactive_user])
+        session.add_all([user1, user2, viewer_user, stranger_user, admin_user, inactive_user])
         await session.flush()
 
         ws1 = Workspace(id=1, name="Workspace Alpha", owner_id=1)
         session.add(ws1)
+        await session.flush()
+
+        member_u2 = WorkspaceMember(workspace_id=1, user_id=2, role=WorkspaceRole.MEMBER.value)
+        member_viewer = WorkspaceMember(workspace_id=1, user_id=3, role=WorkspaceRole.VIEWER.value)
+        session.add_all([member_u2, member_viewer])
         await session.flush()
 
         proj1 = Project(id=1, workspace_id=1, name="Project Alpha", description="Alpha project", owner_id=1)
@@ -95,12 +118,22 @@ async def setup_test_db():
 
 @pytest.fixture
 def member_token() -> str:
-    return create_access_token({"sub": "1", "role": UserRole.MEMBER.value})
+    return create_access_token(user_id=1, role=UserRole.MEMBER.value)
 
 
 @pytest.fixture
 def admin_token() -> str:
-    return create_access_token({"sub": "99", "role": UserRole.ADMIN.value})
+    return create_access_token(user_id=99, role=UserRole.ADMIN.value)
+
+
+@pytest.fixture
+def viewer_token() -> str:
+    return create_access_token(user_id=3, role=UserRole.MEMBER.value)
+
+
+@pytest.fixture
+def stranger_token() -> str:
+    return create_access_token(user_id=4, role=UserRole.MEMBER.value)
 
 
 @pytest.fixture
@@ -111,6 +144,16 @@ def member_headers(member_token: str) -> dict[str, str]:
 @pytest.fixture
 def admin_headers(admin_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {admin_token}"}
+
+
+@pytest.fixture
+def viewer_headers(viewer_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {viewer_token}"}
+
+
+@pytest.fixture
+def stranger_headers(stranger_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {stranger_token}"}
 
 
 @pytest.fixture
