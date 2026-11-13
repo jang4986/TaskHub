@@ -96,6 +96,16 @@ def test_add_member_nonexistent_email(client: TestClient):
     assert "User with this email not found" in response.json()["detail"]
 
 
+def test_add_member_owner_role_forbidden_422(client: TestClient):
+    # Inviting someone with role OWNER must be rejected with 422 Unprocessable Entity
+    payload = {
+        "email": "stranger@example.com",
+        "role": "OWNER",
+    }
+    response = client.post("/api/v1/workspaces/1/members", json=payload)
+    assert response.status_code == 422
+
+
 def test_remove_member_owner_protection(client: TestClient):
     # User 1 is the owner of workspace 1
     response = client.delete("/api/v1/workspaces/1/members/1")

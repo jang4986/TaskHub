@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Path, Query, Response, status
 
 from taskhub.api.deps import CurrentActiveUser, ProjectServ, TaskServ
@@ -22,7 +24,7 @@ async def create_project(
     project_in: ProjectCreate,
     current_user: CurrentActiveUser,
     service: ProjectServ,
-    workspace_id: int = Path(..., ge=1),
+    workspace_id: Annotated[int, Path(ge=1)],
 ) -> ProjectResponse:
     project = await service.create_project(
         workspace_id=workspace_id,
@@ -41,14 +43,16 @@ async def list_workspace_projects(
     response: Response,
     current_user: CurrentActiveUser,
     service: ProjectServ,
-    workspace_id: int = Path(..., ge=1),
-    skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(
-        DEFAULT_PAGE_SIZE,
-        ge=1,
-        le=MAX_PAGE_SIZE,
-        description="Max number of items to return",
-    ),
+    workspace_id: Annotated[int, Path(ge=1)],
+    skip: Annotated[int, Query(ge=0, description="Number of items to skip")] = 0,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description="Max number of items to return",
+        ),
+    ] = DEFAULT_PAGE_SIZE,
 ) -> list[ProjectResponse]:
     projects, total = await service.list_projects(
         workspace_id=workspace_id,
@@ -71,7 +75,7 @@ async def list_workspace_projects(
 async def get_project(
     current_user: CurrentActiveUser,
     service: ProjectServ,
-    project_id: int = Path(..., ge=1),
+    project_id: Annotated[int, Path(ge=1)],
 ) -> ProjectResponse:
     project = await service.get_project(
         project_id=project_id,
@@ -89,7 +93,7 @@ async def update_project(
     project_in: ProjectUpdate,
     current_user: CurrentActiveUser,
     service: ProjectServ,
-    project_id: int = Path(..., ge=1),
+    project_id: Annotated[int, Path(ge=1)],
 ) -> ProjectResponse:
     project = await service.update_project(
         project_id=project_id,
@@ -107,7 +111,7 @@ async def update_project(
 async def delete_project(
     current_user: CurrentActiveUser,
     service: ProjectServ,
-    project_id: int = Path(..., ge=1),
+    project_id: Annotated[int, Path(ge=1)],
 ) -> None:
     await service.delete_project(
         project_id=project_id,
@@ -125,7 +129,7 @@ async def delete_project(
     summary="Create a task for a project",
 )
 async def create_task_for_project(
-    project_id: int,
+    project_id: Annotated[int, Path(ge=1)],
     task_in: TaskCreate,
     current_user: CurrentActiveUser,
     service: TaskServ,
@@ -145,19 +149,21 @@ async def create_task_for_project(
     summary="List tasks of a project with pagination and filters",
 )
 async def list_tasks_for_project(
-    project_id: int,
+    project_id: Annotated[int, Path(ge=1)],
     response: Response,
     current_user: CurrentActiveUser,
     service: TaskServ,
-    skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(
-        DEFAULT_PAGE_SIZE,
-        ge=1,
-        le=MAX_PAGE_SIZE,
-        description="Max number of items to return",
-    ),
-    status: TaskStatus | None = Query(None, description="Filter by status"),
-    priority: TaskPriority | None = Query(None, description="Filter by priority"),
+    skip: Annotated[int, Query(ge=0, description="Number of items to skip")] = 0,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description="Max number of items to return",
+        ),
+    ] = DEFAULT_PAGE_SIZE,
+    status: Annotated[TaskStatus | None, Query(description="Filter by status")] = None,
+    priority: Annotated[TaskPriority | None, Query(description="Filter by priority")] = None,
 ) -> list[TaskResponse]:
     tasks, total = await service.get_project_tasks(
         project_id=project_id,

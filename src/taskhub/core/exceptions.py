@@ -12,16 +12,84 @@ class TaskNotFoundError(HTTPException):
 
 
 class ProjectNotFoundError(HTTPException):
-    def __init__(self, project_id: int):
+    def __init__(self, project_id: int | None = None):
+        detail = (
+            f"Project not found (id {project_id})"
+            if project_id is not None
+            else "Project not found"
+        )
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Project with id {project_id} not found",
+            detail=detail,
+        )
+
+
+class WorkspaceNotFoundError(HTTPException):
+    def __init__(self, workspace_id: int | None = None):
+        detail = (
+            f"Workspace with id {workspace_id} not found"
+            if workspace_id is not None
+            else "Workspace not found"
+        )
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+
+class WorkspaceAccessDeniedError(HTTPException):
+    def __init__(self, detail: str = "Access forbidden: Not a member of this workspace"):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+        )
+
+
+class WorkspaceMemberNotFoundError(HTTPException):
+    def __init__(self, user_id: int | None = None):
+        detail = (
+            f"Member with id {user_id} not found in this workspace"
+            if user_id is not None
+            else "Member not found in this workspace"
+        )
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+
+class UserAlreadyWorkspaceMemberError(HTTPException):
+    def __init__(self, detail: str = "User is already a member of this workspace"):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
+        )
+
+
+class CannotRemoveOwnerError(HTTPException):
+    def __init__(self, detail: str = "Cannot remove the workspace owner"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class WorkspaceSlugConflictError(HTTPException):
+    def __init__(self, detail: str = "Workspace with this slug already exists"):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
         )
 
 
 class UserNotFoundError(HTTPException):
-    def __init__(self, user_id: int | None = None):
-        detail = f"User with id {user_id} not found" if user_id is not None else "User not found"
+    def __init__(self, user_id: int | None = None, detail: str | None = None):
+        if detail is None:
+            detail = (
+                f"User with id {user_id} not found"
+                if user_id is not None
+                else "User not found"
+            )
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,

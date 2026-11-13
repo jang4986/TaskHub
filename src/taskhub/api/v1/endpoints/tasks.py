@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Path, Response, status
 
 from taskhub.api.deps import CurrentActiveUser, TaskServ
 from taskhub.schemas.task import TaskResponse, TaskUpdate
@@ -12,7 +14,7 @@ router = APIRouter()
     summary="Get task details by ID",
 )
 async def get_task(
-    task_id: int,
+    task_id: Annotated[int, Path(ge=1)],
     current_user: CurrentActiveUser,
     service: TaskServ,
 ) -> TaskResponse:
@@ -26,7 +28,7 @@ async def get_task(
     summary="Partially update a task",
 )
 async def update_task(
-    task_id: int,
+    task_id: Annotated[int, Path(ge=1)],
     task_in: TaskUpdate,
     current_user: CurrentActiveUser,
     service: TaskServ,
@@ -45,7 +47,7 @@ async def update_task(
     summary="Delete a task by ID",
 )
 async def delete_task(
-    task_id: int,
+    task_id: Annotated[int, Path(ge=1)],
     current_user: CurrentActiveUser,
     service: TaskServ,
 ) -> Response:

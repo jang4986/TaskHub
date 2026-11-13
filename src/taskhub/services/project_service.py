@@ -1,13 +1,19 @@
-from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
 from taskhub.core.enums import WorkspaceRole
+from taskhub.core.exceptions import (
+    ProjectAccessDeniedError,
+    ProjectNotFoundError,
+    WorkspaceAccessDeniedError,
+    WorkspaceNotFoundError,
+)
 from taskhub.models.project import Project
 from taskhub.repositories.project_repo import ProjectRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.project import ProjectCreate, ProjectUpdate
+from taskhub.services.workspace_service import require_workspace_role
 
 
 class ProjectService:
@@ -29,32 +35,14 @@ class ProjectService:
         user_id: int,
         data: ProjectCreate,
     ) -> Project:
-        workspace = await self.ws_repo.get(workspace_id)
-        if workspace is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
-
-        is_owner = workspace.owner_id == user_id
-        member = await self.member_repo.get_member(workspace_id, user_id)
-
-        if not (is_owner or member is not None):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not a member of this workspace",
-            )
-
-        is_admin = member is not None and str(member.role).upper() in [
-            WorkspaceRole.OWNER.value,
-            WorkspaceRole.ADMIN.value,
-        ]
-
-        if not (is_owner or is_admin):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only workspace OWNER or ADMIN can create projects",
-            )
+        await require_workspace_role(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            denied_detail="Only workspace OWNER or ADMIN can create projects",
+        )
 
         project = Project(
             workspace_id=workspace_id,
@@ -74,21 +62,14 @@ class ProjectService:
         skip: int = 0,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> tuple[list[Project], int]:
-        workspace = await self.ws_repo.get(workspace_id)
-        if workspace is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
-
-        is_owner = workspace.owner_id == user_id
-        member = await self.member_repo.get_member(workspace_id, user_id)
-
-        if not (is_owner or member is not None):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not a member of this workspace",
-            )
+        await require_workspace_role(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            allowed_roles=None,
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            denied_detail="Not a member of this workspace",
+        )
 
         return await self.project_repo.get_by_workspace_paginated(
             workspace_id=workspace_id,
@@ -99,30 +80,19 @@ class ProjectService:
     async def get_project(self, project_id: int, user_id: int) -> Project:
         project = await self.project_repo.get(project_id)
         if project is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found",
-            )
+            raise ProjectNotFoundError(project_id)
 
         if project.workspace_id is not None:
-            workspace = await self.ws_repo.get(project.workspace_id)
-            if workspace is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Workspace not found",
-                )
-            is_ws_owner = workspace.owner_id == user_id
-            member = await self.member_repo.get_member(project.workspace_id, user_id)
-            if not (is_ws_owner or member is not None or project.owner_id == user_id):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not a member of this workspace",
-                )
-        elif project.owner_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access forbidden: You do not have permission to view this project",
+            await require_workspace_role(
+                workspace_id=project.workspace_id,
+                user_id=user_id,
+                allowed_roles=None,
+                ws_repo=self.ws_repo,
+                member_repo=self.member_repo,
+                denied_detail="Not a member of this workspace",
             )
+        elif project.owner_id != user_id:
+            raise ProjectAccessDeniedError()
 
         return project
 
@@ -134,30 +104,27 @@ class ProjectService:
     ) -> Project:
         project = await self.project_repo.get(project_id)
         if project is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found",
-            )
+            raise ProjectNotFoundError(project_id)
 
-        is_project_owner = project.owner_id == user_id
-        is_ws_owner = False
-        is_ws_admin = False
+        has_permission = False
+        if project.owner_id == user_id:
+            has_permission = True
+        elif project.workspace_id is not None:
+            try:
+                await require_workspace_role(
+                    workspace_id=project.workspace_id,
+                    user_id=user_id,
+                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+                    ws_repo=self.ws_repo,
+                    member_repo=self.member_repo,
+                )
+                has_permission = True
+            except (WorkspaceNotFoundError, WorkspaceAccessDeniedError):
+                has_permission = False
 
-        if project.workspace_id is not None:
-            workspace = await self.ws_repo.get(project.workspace_id)
-            if workspace and workspace.owner_id == user_id:
-                is_ws_owner = True
-            member = await self.member_repo.get_member(project.workspace_id, user_id)
-            if member and str(member.role).upper() in [
-                WorkspaceRole.OWNER.value,
-                WorkspaceRole.ADMIN.value,
-            ]:
-                is_ws_admin = True
-
-        if not (is_project_owner or is_ws_owner or is_ws_admin):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission denied: You do not have permission to update this project",
+        if not has_permission:
+            raise ProjectAccessDeniedError(
+                "Permission denied: You do not have permission to update this project"
             )
 
         update_dict = data.model_dump(exclude_unset=True)
@@ -174,29 +141,25 @@ class ProjectService:
     async def delete_project(self, project_id: int, user_id: int) -> bool:
         project = await self.project_repo.get(project_id)
         if project is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found",
-            )
-
-        is_ws_owner = False
-        is_ws_admin = False
+            raise ProjectNotFoundError(project_id)
 
         if project.workspace_id is not None:
-            workspace = await self.ws_repo.get(project.workspace_id)
-            if workspace and workspace.owner_id == user_id:
-                is_ws_owner = True
-            member = await self.member_repo.get_member(project.workspace_id, user_id)
-            if member and str(member.role).upper() in [
-                WorkspaceRole.OWNER.value,
-                WorkspaceRole.ADMIN.value,
-            ]:
-                is_ws_admin = True
-
-        if not (is_ws_owner or is_ws_admin):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only workspace OWNER or ADMIN can delete this project",
+            try:
+                await require_workspace_role(
+                    workspace_id=project.workspace_id,
+                    user_id=user_id,
+                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+                    ws_repo=self.ws_repo,
+                    member_repo=self.member_repo,
+                    denied_detail="Only workspace OWNER or ADMIN can delete this project",
+                )
+            except (WorkspaceNotFoundError, WorkspaceAccessDeniedError):
+                raise WorkspaceAccessDeniedError(
+                    "Only workspace OWNER or ADMIN can delete this project"
+                ) from None
+        else:
+            raise WorkspaceAccessDeniedError(
+                "Only workspace OWNER or ADMIN can delete this project"
             )
 
         await self.project_repo.remove(project_id)

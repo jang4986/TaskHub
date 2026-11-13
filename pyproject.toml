@@ -50,10 +50,13 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = [
-    "B008",  # Do not perform function call in argument defaults (FastAPI Depends/Query/Path)
     "B009",  # Do not call getattr with a constant attribute value (generic BaseRepository attribute lookup)
     "UP046", # Generic class BaseRepository uses Generic subclass
 ]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
 
 [tool.fastapi]
 entrypoint = "taskhub.main:app"

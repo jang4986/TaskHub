@@ -1,9 +1,16 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
 from taskhub.core.enums import WorkspaceRole
 from taskhub.schemas.user import UserResponse
+
+InvitableWorkspaceRole = Literal[
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.MEMBER,
+    WorkspaceRole.VIEWER,
+]
 
 
 class WorkspaceMemberBase(BaseModel):
@@ -12,11 +19,11 @@ class WorkspaceMemberBase(BaseModel):
 
 class WorkspaceMemberAdd(BaseModel):
     email: EmailStr
-    role: WorkspaceRole = WorkspaceRole.MEMBER
+    role: InvitableWorkspaceRole = WorkspaceRole.MEMBER
 
 
 class WorkspaceMemberUpdate(BaseModel):
-    role: WorkspaceRole
+    role: InvitableWorkspaceRole
 
 
 class WorkspaceMemberResponse(WorkspaceMemberBase):

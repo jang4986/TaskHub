@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Path, Query, Response, status
 
 from taskhub.api.deps import CurrentActiveUser, WorkspaceServ
@@ -37,13 +39,15 @@ async def list_workspaces(
     response: Response,
     current_user: CurrentActiveUser,
     workspace_service: WorkspaceServ,
-    skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(
-        DEFAULT_PAGE_SIZE,
-        ge=1,
-        le=MAX_PAGE_SIZE,
-        description="Max number of items to return",
-    ),
+    skip: Annotated[int, Query(ge=0, description="Number of items to skip")] = 0,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description="Max number of items to return",
+        ),
+    ] = DEFAULT_PAGE_SIZE,
 ) -> list[WorkspaceResponse]:
     workspaces, total = await workspace_service.list_user_workspaces(
         user_id=current_user.id,
@@ -62,7 +66,7 @@ async def list_workspaces(
 async def get_workspace(
     current_user: CurrentActiveUser,
     workspace_service: WorkspaceServ,
-    workspace_id: int = Path(..., ge=1),
+    workspace_id: Annotated[int, Path(ge=1)],
 ) -> WorkspaceDetailResponse:
     workspace = await workspace_service.get_workspace_detail(
         workspace_id=workspace_id,
@@ -80,7 +84,7 @@ async def update_workspace(
     data: WorkspaceUpdate,
     current_user: CurrentActiveUser,
     workspace_service: WorkspaceServ,
-    workspace_id: int = Path(..., ge=1),
+    workspace_id: Annotated[int, Path(ge=1)],
 ) -> WorkspaceResponse:
     workspace = await workspace_service.update_workspace(
         workspace_id=workspace_id,
@@ -98,7 +102,7 @@ async def update_workspace(
 async def delete_workspace(
     current_user: CurrentActiveUser,
     workspace_service: WorkspaceServ,
-    workspace_id: int = Path(..., ge=1),
+    workspace_id: Annotated[int, Path(ge=1)],
 ) -> None:
     await workspace_service.delete_workspace(
         workspace_id=workspace_id,
@@ -116,7 +120,7 @@ async def add_workspace_member(
     data: WorkspaceMemberAdd,
     current_user: CurrentActiveUser,
     workspace_service: WorkspaceServ,
-    workspace_id: int = Path(..., ge=1),
+    workspace_id: Annotated[int, Path(ge=1)],
 ) -> WorkspaceMemberResponse:
     member = await workspace_service.add_member(
         workspace_id=workspace_id,
@@ -134,8 +138,8 @@ async def add_workspace_member(
 async def remove_workspace_member(
     current_user: CurrentActiveUser,
     workspace_service: WorkspaceServ,
-    workspace_id: int = Path(..., ge=1),
-    user_id: int = Path(..., ge=1),
+    workspace_id: Annotated[int, Path(ge=1)],
+    user_id: Annotated[int, Path(ge=1)],
 ) -> None:
     await workspace_service.remove_member(
         workspace_id=workspace_id,

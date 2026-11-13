@@ -1,11 +1,22 @@
 import re
 import unicodedata
+import uuid
+from collections.abc import Collection
 
-from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
 from taskhub.core.enums import WorkspaceRole
+from taskhub.core.exceptions import (
+    CannotRemoveOwnerError,
+    UserAlreadyWorkspaceMemberError,
+    UserNotFoundError,
+    WorkspaceAccessDeniedError,
+    WorkspaceMemberNotFoundError,
+    WorkspaceNotFoundError,
+    WorkspaceSlugConflictError,
+)
 from taskhub.models.workspace import Workspace
 from taskhub.models.workspace_member import WorkspaceMember
 from taskhub.repositories.user_repo import UserRepository
@@ -20,6 +31,33 @@ def slugify(text: str) -> str:
     slug = re.sub(r"[^\w\s-]", "", text.lower()).strip()
     slug = re.sub(r"[-\s]+", "-", slug)
     return slug or "workspace"
+
+
+async def require_workspace_role(
+    workspace_id: int,
+    user_id: int,
+    allowed_roles: Collection[WorkspaceRole | str] | None,
+    ws_repo: WorkspaceRepository,
+    member_repo: WorkspaceMemberRepository,
+    denied_detail: str | None = None,
+) -> tuple[Workspace, WorkspaceMember]:
+    """Validate that workspace exists, user is a member, and role matches allowed_roles."""
+    workspace = await ws_repo.get(workspace_id)
+    if workspace is None:
+        raise WorkspaceNotFoundError(workspace_id)
+
+    member = await member_repo.get_member(workspace_id, user_id)
+    if member is None:
+        raise WorkspaceAccessDeniedError("Not a member of this workspace")
+
+    if allowed_roles is not None:
+        allowed_str = {r.value if hasattr(r, "value") else str(r) for r in allowed_roles}
+        member_role_str = member.role.value if hasattr(member.role, "value") else str(member.role)
+        if member_role_str not in allowed_str:
+            detail = denied_detail or "Insufficient privileges in this workspace"
+            raise WorkspaceAccessDeniedError(detail)
+
+    return workspace, member
 
 
 class WorkspaceService:
@@ -43,42 +81,41 @@ class WorkspaceService:
             slug = f"{base_slug}-{counter}"
             counter += 1
 
-        workspace = Workspace(
-            name=data.name,
-            slug=slug,
-            description=data.description,
-            owner_id=user_id,
-        )
-        self.db.add(workspace)
-        await self.db.flush()
-        await self.db.refresh(workspace)
+        for _ in range(5):
+            try:
+                workspace = Workspace(
+                    name=data.name,
+                    slug=slug,
+                    description=data.description,
+                    owner_id=user_id,
+                )
+                self.db.add(workspace)
+                await self.db.flush()
 
-        # Creator automatically becomes OWNER member
-        await self.member_repo.add_member(
-            workspace_id=workspace.id,
-            user_id=user_id,
-            role=WorkspaceRole.OWNER,
-        )
+                # Creator automatically becomes OWNER member
+                await self.member_repo.add_member(
+                    workspace_id=workspace.id,
+                    user_id=user_id,
+                    role=WorkspaceRole.OWNER,
+                )
 
-        await self.db.commit()
-        await self.db.refresh(workspace)
-        return workspace
+                await self.db.commit()
+                await self.db.refresh(workspace)
+                return workspace
+            except IntegrityError:
+                await self.db.rollback()
+                slug = f"{base_slug}-{uuid.uuid4().hex[:6]}"
+
+        raise WorkspaceSlugConflictError("Could not create workspace due to slug conflict")
 
     async def get_workspace_detail(self, workspace_id: int, user_id: int) -> Workspace:
         workspace = await self.ws_repo.get_by_id_with_details(workspace_id)
         if workspace is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
+            raise WorkspaceNotFoundError(workspace_id)
 
-        is_owner = workspace.owner_id == user_id
         is_member = any(m.user_id == user_id for m in workspace.members)
-        if not (is_owner or is_member):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access forbidden: Not a member of this workspace",
-            )
+        if not is_member:
+            raise WorkspaceAccessDeniedError("Access forbidden: Not a member of this workspace")
 
         return workspace
 
@@ -96,26 +133,14 @@ class WorkspaceService:
         user_id: int,
         data: WorkspaceUpdate,
     ) -> Workspace:
-        workspace = await self.ws_repo.get(workspace_id)
-        if workspace is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
-
-        # Permission check: OWNER or ADMIN
-        is_owner = workspace.owner_id == user_id
-        member = await self.member_repo.get_member(workspace_id, user_id)
-        is_admin = member is not None and str(member.role).upper() in [
-            WorkspaceRole.OWNER.value,
-            WorkspaceRole.ADMIN.value,
-        ]
-
-        if not (is_owner or is_admin):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission denied",
-            )
+        workspace, _ = await require_workspace_role(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            denied_detail="Permission denied",
+        )
 
         update_dict = data.model_dump(exclude_unset=True)
         if "name" in update_dict and update_dict["name"] is not None:
@@ -129,18 +154,14 @@ class WorkspaceService:
         return workspace
 
     async def delete_workspace(self, workspace_id: int, user_id: int) -> None:
-        workspace = await self.ws_repo.get(workspace_id)
-        if workspace is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
-
-        if workspace.owner_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the workspace owner can delete this workspace",
-            )
+        await require_workspace_role(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            allowed_roles={WorkspaceRole.OWNER},
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            denied_detail="Only the workspace owner can delete this workspace",
+        )
 
         await self.ws_repo.remove(workspace_id)
         await self.db.commit()
@@ -151,50 +172,34 @@ class WorkspaceService:
         current_user_id: int,
         data: WorkspaceMemberAdd,
     ) -> WorkspaceMember:
-        workspace = await self.ws_repo.get(workspace_id)
-        if workspace is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
+        await require_workspace_role(
+            workspace_id=workspace_id,
+            user_id=current_user_id,
+            allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            denied_detail="Permission denied: Only OWNER or ADMIN can invite members",
+        )
 
-        # Permission check: current user must be OWNER or ADMIN
-        is_owner = workspace.owner_id == current_user_id
-        current_member = await self.member_repo.get_member(workspace_id, current_user_id)
-        is_admin = current_member is not None and str(current_member.role).upper() in [
-            WorkspaceRole.OWNER.value,
-            WorkspaceRole.ADMIN.value,
-        ]
-
-        if not (is_owner or is_admin):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission denied: Only OWNER or ADMIN can invite members",
-            )
-
-        # Target user lookup
         target_user = await self.user_repo.get_by_email(data.email)
         if target_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User with this email not found",
-            )
+            raise UserNotFoundError(detail="User with this email not found")
 
-        # Check existing member
         existing_member = await self.member_repo.get_member(workspace_id, target_user.id)
         if existing_member is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User is already a member of this workspace",
-            )
+            raise UserAlreadyWorkspaceMemberError()
 
-        new_member = await self.member_repo.add_member(
-            workspace_id=workspace_id,
-            user_id=target_user.id,
-            role=data.role,
-        )
-        await self.db.commit()
-        # Reload member with user relationship for response
+        try:
+            new_member = await self.member_repo.add_member(
+                workspace_id=workspace_id,
+                user_id=target_user.id,
+                role=data.role,
+            )
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise UserAlreadyWorkspaceMemberError() from None
+
         loaded_member = await self.member_repo.get_member(workspace_id, target_user.id)
         return loaded_member or new_member
 
@@ -204,31 +209,21 @@ class WorkspaceService:
         current_user_id: int,
         target_user_id: int,
     ) -> None:
-        workspace = await self.ws_repo.get(workspace_id)
-        if workspace is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
-            )
-
-        if workspace.owner_id != current_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the workspace owner can remove members",
-            )
+        workspace, _ = await require_workspace_role(
+            workspace_id=workspace_id,
+            user_id=current_user_id,
+            allowed_roles={WorkspaceRole.OWNER},
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            denied_detail="Only the workspace owner can remove members",
+        )
 
         if target_user_id == workspace.owner_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot remove the workspace owner",
-            )
+            raise CannotRemoveOwnerError()
 
         existing_member = await self.member_repo.get_member(workspace_id, target_user_id)
         if existing_member is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Member not found in this workspace",
-            )
+            raise WorkspaceMemberNotFoundError(target_user_id)
 
         await self.member_repo.remove_member(workspace_id, target_user_id)
         await self.db.commit()

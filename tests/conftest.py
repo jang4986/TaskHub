@@ -1,4 +1,8 @@
+import os
 from collections.abc import AsyncGenerator
+
+# Ensure SECRET_KEY is set in environment for tests
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-testing-32-chars-long")
 
 import pytest
 import pytest_asyncio
