@@ -1,4 +1,5 @@
-from typing import Any, Generic, Optional, Type, TypeVar, Union
+from typing import Any, Generic, TypeVar
+
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,12 +14,13 @@ UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
 
 class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
-    def __init__(self, model: Type[ModelType], db: AsyncSession) -> None:
+    def __init__(self, model: type[ModelType], db: AsyncSession) -> None:
         self.model = model
         self.db = db
 
-    async def get(self, id: Any) -> Optional[ModelType]:
-        stmt = select(self.model).where(self.model.id == id)
+    async def get(self, id: Any) -> ModelType | None:
+        model_id = getattr(self.model, "id")
+        stmt = select(self.model).where(model_id == id)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -27,7 +29,8 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         skip: int = 0,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> list[ModelType]:
-        stmt = select(self.model).order_by(self.model.id.asc()).offset(skip).limit(limit)
+        model_id = getattr(self.model, "id")
+        stmt = select(self.model).order_by(model_id.asc()).offset(skip).limit(limit)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -40,12 +43,13 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         total_res = await self.db.execute(total_stmt)
         total = total_res.scalar() or 0
 
-        stmt = select(self.model).order_by(self.model.id.asc()).offset(skip).limit(limit)
+        model_id = getattr(self.model, "id")
+        stmt = select(self.model).order_by(model_id.asc()).offset(skip).limit(limit)
         result = await self.db.execute(stmt)
         items = list(result.scalars().all())
         return items, total
 
-    async def create(self, obj_in: Union[CreateSchemaType, dict[str, Any]]) -> ModelType:
+    async def create(self, obj_in: CreateSchemaType | dict[str, Any]) -> ModelType:
         if isinstance(obj_in, dict):
             create_data = obj_in
         else:
@@ -59,7 +63,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     async def update(
         self,
         db_obj: ModelType,
-        obj_in: Union[UpdateSchemaType, dict[str, Any]],
+        obj_in: UpdateSchemaType | dict[str, Any],
     ) -> ModelType:
         if isinstance(obj_in, dict):
             update_data = obj_in
@@ -79,7 +83,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         await self.db.refresh(db_obj)
         return db_obj
 
-    async def remove(self, id: Any) -> Optional[ModelType]:
+    async def remove(self, id: Any) -> ModelType | None:
         obj = await self.get(id)
         if obj is not None:
             await self.db.delete(obj)

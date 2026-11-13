@@ -1,4 +1,4 @@
-from typing import Optional, Union
+
 from sqlalchemy import select
 
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
@@ -57,7 +57,9 @@ class TaskService:
             res = await self.task_repo.db.execute(stmt)
             member = res.scalar_one_or_none()
             if member is not None:
-                member_role_val = member.role.value if hasattr(member.role, "value") else str(member.role)
+                member_role_val = (
+                    member.role.value if hasattr(member.role, "value") else str(member.role)
+                )
                 if require_write and member_role_val == WorkspaceRole.VIEWER.value:
                     raise InsufficientPrivilegesError(
                         "Viewers do not have permission to modify tasks in this project"
@@ -130,8 +132,8 @@ class TaskService:
         current_user: User,
         skip: int = 0,
         limit: int = DEFAULT_PAGE_SIZE,
-        status_filter: Optional[Union[TaskStatus, str]] = None,
-        priority_filter: Optional[Union[TaskPriority, str]] = None,
+        status_filter: TaskStatus | str | None = None,
+        priority_filter: TaskPriority | str | None = None,
     ) -> tuple[list[Task], int]:
         await self.check_project_access(
             project_id=project_id,

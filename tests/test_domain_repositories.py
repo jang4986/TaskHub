@@ -1,15 +1,14 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from taskhub.core.enums import NotificationType, ProjectStatus, TaskPriority, TaskStatus, UserRole, WorkspaceRole
-from taskhub.models.comment import Comment
-from taskhub.models.label import Label
+from taskhub.core.enums import (
+    NotificationType,
+    TaskPriority,
+    TaskStatus,
+    UserRole,
+    WorkspaceRole,
+)
 from taskhub.models.notification import Notification
-from taskhub.models.project import Project
-from taskhub.models.task import Task
 from taskhub.models.task_label import TaskLabel
-from taskhub.models.user import User
-from taskhub.models.workspace import Workspace
 from taskhub.models.workspace_member import WorkspaceMember
 from taskhub.repositories.comment_repo import CommentRepository
 from taskhub.repositories.label_repo import LabelRepository

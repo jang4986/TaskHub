@@ -1,4 +1,4 @@
-from typing import Optional, Union
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,8 +29,8 @@ class TaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         project_id: int,
         skip: int = 0,
         limit: int = DEFAULT_PAGE_SIZE,
-        status: Optional[Union[TaskStatus, str]] = None,
-        priority: Optional[Union[TaskPriority, str]] = None,
+        status: TaskStatus | str | None = None,
+        priority: TaskPriority | str | None = None,
     ) -> tuple[list[Task], int]:
         filters = [Task.project_id == project_id]
 

@@ -1,3 +1,9 @@
+from taskhub.schemas.project import (
+    ProjectBase,
+    ProjectCreate,
+    ProjectResponse,
+    ProjectUpdate,
+)
 from taskhub.schemas.task import (
     TaskBase,
     TaskCreate,
@@ -14,19 +20,45 @@ from taskhub.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from taskhub.schemas.workspace import (
+    WorkspaceBase,
+    WorkspaceCreate,
+    WorkspaceDetailResponse,
+    WorkspaceResponse,
+    WorkspaceUpdate,
+)
+from taskhub.schemas.workspace_member import (
+    WorkspaceMemberAdd,
+    WorkspaceMemberBase,
+    WorkspaceMemberResponse,
+    WorkspaceMemberUpdate,
+)
 
 __all__ = [
+    "ProjectBase",
+    "ProjectCreate",
+    "ProjectUpdate",
+    "ProjectResponse",
     "TaskBase",
     "TaskCreate",
-    "TaskUpdate",
+    "TaskPriority",
     "TaskResponse",
     "TaskStatus",
-    "TaskPriority",
+    "TaskUpdate",
     "Token",
     "TokenPayload",
     "UserBase",
     "UserCreate",
-    "UserUpdate",
-    "UserResponse",
     "UserLogin",
+    "UserResponse",
+    "UserUpdate",
+    "WorkspaceBase",
+    "WorkspaceCreate",
+    "WorkspaceDetailResponse",
+    "WorkspaceMemberAdd",
+    "WorkspaceMemberBase",
+    "WorkspaceMemberResponse",
+    "WorkspaceMemberUpdate",
+    "WorkspaceResponse",
+    "WorkspaceUpdate",
 ]
