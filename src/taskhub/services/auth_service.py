@@ -41,7 +41,7 @@ class AuthService:
             return user
         except IntegrityError:
             await self.user_repo.db.rollback()
-            raise EmailAlreadyRegisteredError()
+            raise EmailAlreadyRegisteredError() from None
 
     async def authenticate(self, email: str, password: str) -> User:
         user = await self.user_repo.get_by_email(email=email)

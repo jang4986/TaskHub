@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from taskhub.core.enums import UserRole
@@ -15,8 +15,8 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    password: Optional[str] = Field(None, min_length=6, max_length=128)
+    full_name: str | None = Field(None, min_length=1, max_length=255)
+    password: str | None = Field(None, min_length=6, max_length=128)
 
 
 class UserResponse(UserBase):

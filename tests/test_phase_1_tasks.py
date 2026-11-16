@@ -72,7 +72,7 @@ def test_get_project_tasks_and_filtering(client: TestClient):
     project_id = 10
 
     # Seed 3 tasks
-    task1 = client.post(
+    _task1 = client.post(
         f"/api/v1/projects/{project_id}/tasks",
         json={"title": "Task 1", "status": "TODO", "priority": "LOW"},
     ).json()
@@ -80,7 +80,7 @@ def test_get_project_tasks_and_filtering(client: TestClient):
         f"/api/v1/projects/{project_id}/tasks",
         json={"title": "Task 2", "status": "IN_PROGRESS", "priority": "HIGH"},
     ).json()
-    task3 = client.post(
+    _task3 = client.post(
         f"/api/v1/projects/{project_id}/tasks",
         json={"title": "Task 3", "status": "TODO", "priority": "HIGH"},
     ).json()

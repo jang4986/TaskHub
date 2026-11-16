@@ -120,7 +120,9 @@ def test_rbac_admin_endpoint(
     member_headers: dict[str, str],
     admin_headers: dict[str, str],
 ):
-    """Test RBAC: MEMBER gets 403 Forbidden on Admin endpoint, ADMIN gets 200 OK with total header."""
+    """Test RBAC: MEMBER gets 403 Forbidden on Admin endpoint,
+    ADMIN gets 200 OK with total header.
+    """
     # 1. Without auth -> 401
     resp_unauth = unauth_client.get("/api/v1/users")
     assert resp_unauth.status_code == 401

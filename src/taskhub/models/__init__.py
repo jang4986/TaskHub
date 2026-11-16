@@ -11,13 +11,13 @@ from taskhub.models.workspace_member import WorkspaceMember
 
 __all__ = [
     "Base",
+    "Comment",
+    "Label",
+    "Notification",
+    "Project",
+    "Task",
+    "TaskLabel",
     "User",
     "Workspace",
     "WorkspaceMember",
-    "Project",
-    "Task",
-    "Label",
-    "TaskLabel",
-    "Comment",
-    "Notification",
 ]

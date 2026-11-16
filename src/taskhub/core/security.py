@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Union
 import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
 import jwt
 from jwt.exceptions import PyJWTError
 from pwdlib import PasswordHash
@@ -21,12 +22,12 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(
-    user_id: Union[int, str],
+    user_id: int | str,
     role: str,
-    expires_delta: Optional[timedelta] = None,
-    extra_claims: Optional[dict[str, Any]] = None,
+    expires_delta: timedelta | None = None,
+    extra_claims: dict[str, Any] | None = None,
 ) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta:
         expire = now + expires_delta
     else:
@@ -51,7 +52,7 @@ def create_access_token(
     return encoded_jwt
 
 
-def decode_access_token(token: str) -> Optional[dict[str, Any]]:
+def decode_access_token(token: str) -> dict[str, Any] | None:
     try:
         payload = jwt.decode(
             token,

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from taskhub.core.enums import TaskPriority, TaskStatus
@@ -7,11 +7,11 @@ from taskhub.core.enums import TaskPriority, TaskStatus
 
 class TaskBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Tiêu đề công việc")
-    description: Optional[str] = Field(None, description="Mô tả chi tiết công việc")
+    description: str | None = Field(None, description="Mô tả chi tiết công việc")
     status: TaskStatus = Field(default=TaskStatus.TODO, description="Trạng thái công việc")
     priority: TaskPriority = Field(default=TaskPriority.MEDIUM, description="Mức độ ưu tiên")
-    due_date: Optional[datetime] = Field(None, description="Hạn hoàn thành công việc")
-    assignee_id: Optional[int] = Field(None, description="ID của người được phân công")
+    due_date: datetime | None = Field(None, description="Hạn hoàn thành công việc")
+    assignee_id: int | None = Field(None, description="ID của người được phân công")
 
 
 class TaskCreate(TaskBase):
@@ -19,12 +19,12 @@ class TaskCreate(TaskBase):
 
 
 class TaskUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=255, description="Tiêu đề công việc")
-    description: Optional[str] = Field(None, description="Mô tả chi tiết công việc")
-    status: Optional[TaskStatus] = Field(None, description="Trạng thái công việc")
-    priority: Optional[TaskPriority] = Field(None, description="Mức độ ưu tiên")
-    due_date: Optional[datetime] = Field(None, description="Hạn hoàn thành công việc")
-    assignee_id: Optional[int] = Field(None, description="ID của người được phân công")
+    title: str | None = Field(None, min_length=1, max_length=255, description="Tiêu đề công việc")
+    description: str | None = Field(None, description="Mô tả chi tiết công việc")
+    status: TaskStatus | None = Field(None, description="Trạng thái công việc")
+    priority: TaskPriority | None = Field(None, description="Mức độ ưu tiên")
+    due_date: datetime | None = Field(None, description="Hạn hoàn thành công việc")
+    assignee_id: int | None = Field(None, description="ID của người được phân công")
 
 
 class TaskResponse(TaskBase):
@@ -37,10 +37,10 @@ class TaskResponse(TaskBase):
 
 
 __all__ = [
-    "TaskStatus",
-    "TaskPriority",
     "TaskBase",
     "TaskCreate",
-    "TaskUpdate",
+    "TaskPriority",
     "TaskResponse",
+    "TaskStatus",
+    "TaskUpdate",
 ]

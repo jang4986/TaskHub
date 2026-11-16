@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from sqlite3 import Connection as SQLite3Connection
+
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,

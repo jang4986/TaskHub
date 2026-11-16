@@ -8,10 +8,10 @@ from taskhub.enums.common import (
 )
 
 __all__ = [
-    "UserRole",
-    "WorkspaceRole",
-    "TaskStatus",
-    "TaskPriority",
     "NotificationType",
     "ProjectStatus",
+    "TaskPriority",
+    "TaskStatus",
+    "UserRole",
+    "WorkspaceRole",
 ]

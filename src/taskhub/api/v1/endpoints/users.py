@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query, Response
 
 from taskhub.api.deps import UserRepo, require_roles
@@ -17,13 +19,15 @@ router = APIRouter()
 async def list_users(
     response: Response,
     user_repo: UserRepo,
-    skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(
-        DEFAULT_PAGE_SIZE,
-        ge=1,
-        le=MAX_PAGE_SIZE,
-        description="Max number of items to return",
-    ),
+    skip: Annotated[int, Query(ge=0, description="Number of items to skip")] = 0,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PAGE_SIZE,
+            description="Max number of items to return",
+        ),
+    ] = DEFAULT_PAGE_SIZE,
 ) -> list[UserResponse]:
     users, total = await user_repo.get_multi_with_total(skip=skip, limit=limit)
     response.headers["X-Total-Count"] = str(total)

@@ -4,14 +4,17 @@ from taskhub.repositories.label_repo import LabelRepository
 from taskhub.repositories.project_repo import ProjectRepository
 from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.user_repo import UserRepository
+from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 
 __all__ = [
     "BaseRepository",
-    "TaskRepository",
-    "UserRepository",
-    "WorkspaceRepository",
-    "ProjectRepository",
     "CommentRepository",
     "LabelRepository",
+    "ProjectRepository",
+    "TaskRepository",
+    "UserRepository",
+    "WorkspaceMemberRepository",
+    "WorkspaceRepository",
+    "WorkspaceMemberRepository",
 ]
