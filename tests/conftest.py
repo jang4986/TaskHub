@@ -82,6 +82,14 @@ async def setup_test_db():
             role=UserRole.MEMBER,
             is_active=True,
         )
+        editor_user = User(
+            id=5,
+            email="editor@example.com",
+            full_name="Editor User",
+            hashed_password=get_password_hash("password123"),
+            role=UserRole.MEMBER,
+            is_active=True,
+        )
         admin_user = User(
             id=99,
             email="admin@example.com",
@@ -98,7 +106,17 @@ async def setup_test_db():
             role=UserRole.MEMBER,
             is_active=False,
         )
-        session.add_all([user1, user2, viewer_user, stranger_user, admin_user, inactive_user])
+        session.add_all(
+            [
+                user1,
+                user2,
+                viewer_user,
+                stranger_user,
+                editor_user,
+                admin_user,
+                inactive_user,
+            ]
+        )
         await session.flush()
 
         ws1 = Workspace(id=1, name="Workspace Alpha", owner_id=1)
@@ -108,7 +126,8 @@ async def setup_test_db():
         member_u1 = WorkspaceMember(workspace_id=1, user_id=1, role=WorkspaceRole.OWNER.value)
         member_u2 = WorkspaceMember(workspace_id=1, user_id=2, role=WorkspaceRole.MEMBER.value)
         member_viewer = WorkspaceMember(workspace_id=1, user_id=3, role=WorkspaceRole.VIEWER.value)
-        session.add_all([member_u1, member_u2, member_viewer])
+        member_editor = WorkspaceMember(workspace_id=1, user_id=5, role=WorkspaceRole.EDITOR.value)
+        session.add_all([member_u1, member_u2, member_viewer, member_editor])
         await session.flush()
 
         proj1 = Project(
@@ -149,6 +168,11 @@ def viewer_token() -> str:
 
 
 @pytest.fixture
+def editor_token() -> str:
+    return create_access_token(user_id=5, role=UserRole.MEMBER.value)
+
+
+@pytest.fixture
 def stranger_token() -> str:
     return create_access_token(user_id=4, role=UserRole.MEMBER.value)
 
@@ -171,6 +195,11 @@ def admin_headers(admin_token: str) -> dict[str, str]:
 @pytest.fixture
 def viewer_headers(viewer_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {viewer_token}"}
+
+
+@pytest.fixture
+def editor_headers(editor_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {editor_token}"}
 
 
 @pytest.fixture

@@ -53,24 +53,28 @@ async def test_full_domain_models_and_repositories():
         project = projects[0]
 
         # 5. Task
-        task_created = await task_repo.create({
-            "project_id": project.id,
-            "assignee_id": 2,
-            "title": "Build Architecture",
-            "description": "Layered architecture implementation",
-            "status": TaskStatus.TODO,
-            "priority": TaskPriority.HIGH,
-            "created_by": user.id,
-        })
+        task_created = await task_repo.create(
+            {
+                "project_id": project.id,
+                "assignee_id": 2,
+                "title": "Build Architecture",
+                "description": "Layered architecture implementation",
+                "status": TaskStatus.TODO,
+                "priority": TaskPriority.HIGH,
+                "created_by": user.id,
+            }
+        )
         assert task_created.id is not None
         assert task_created.title == "Build Architecture"
 
         # 6. Label
-        label = await label_repo.create({
-            "project_id": project.id,
-            "name": "Backend",
-            "color": "#10B981",
-        })
+        label = await label_repo.create(
+            {
+                "project_id": project.id,
+                "name": "Backend",
+                "color": "#10B981",
+            }
+        )
         assert label.id is not None
 
         # 7. Task Label
@@ -79,11 +83,13 @@ async def test_full_domain_models_and_repositories():
         await session.flush()
 
         # 8. Comment
-        comment = await comment_repo.create({
-            "task_id": task_created.id,
-            "author_id": user.id,
-            "content": "Work is progressing well",
-        })
+        comment = await comment_repo.create(
+            {
+                "task_id": task_created.id,
+                "author_id": user.id,
+                "content": "Work is progressing well",
+            }
+        )
         assert comment.id is not None
         comments = await comment_repo.get_by_task(task_id=task_created.id)
         assert len(comments) == 1

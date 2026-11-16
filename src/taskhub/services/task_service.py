@@ -1,4 +1,3 @@
-
 from sqlalchemy import select
 
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
@@ -86,6 +85,29 @@ class TaskService:
         )
         return task
 
+    async def validate_assignee_in_workspace(self, project_id: int, assignee_id: int) -> None:
+        assignee = await self.task_repo.db.get(User, assignee_id)
+        if assignee is None:
+            raise AssigneeNotFoundError(assignee_id)
+
+        project = await self.task_repo.db.get(Project, project_id)
+        if project is not None and project.workspace_id is not None:
+            stmt = select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == project.workspace_id,
+                WorkspaceMember.user_id == assignee_id,
+            )
+            res = await self.task_repo.db.execute(stmt)
+            is_ws_member = res.scalar_one_or_none() is not None
+            ws = await self.task_repo.db.get(Workspace, project.workspace_id)
+            is_ws_owner = ws is not None and ws.owner_id == assignee_id
+            if not (is_ws_member or is_ws_owner):
+                from fastapi import HTTPException, status
+
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Assignee must be a member of the workspace containing this project",
+                )
+
     async def create_task(
         self,
         project_id: int,
@@ -105,11 +127,9 @@ class TaskService:
         if creator is None:
             raise UserNotFoundError(created_by)
 
-        # Validate assignee exists if provided
+        # Validate assignee exists and belongs to workspace if provided
         if task_in.assignee_id is not None:
-            assignee = await self.task_repo.db.get(User, task_in.assignee_id)
-            if assignee is None:
-                raise AssigneeNotFoundError(task_in.assignee_id)
+            await self.validate_assignee_in_workspace(project_id, task_in.assignee_id)
 
         task = await self.task_repo.create_with_project(
             project_id=project_id,
@@ -134,6 +154,7 @@ class TaskService:
         limit: int = DEFAULT_PAGE_SIZE,
         status_filter: TaskStatus | str | None = None,
         priority_filter: TaskPriority | str | None = None,
+        assignee_id_filter: int | None = None,
     ) -> tuple[list[Task], int]:
         await self.check_project_access(
             project_id=project_id,
@@ -146,6 +167,7 @@ class TaskService:
             limit=limit,
             status=status_filter,
             priority=priority_filter,
+            assignee_id=assignee_id_filter,
         )
 
     async def update_task(
@@ -162,9 +184,7 @@ class TaskService:
 
         # Validate new assignee if provided
         if task_in.assignee_id is not None:
-            assignee = await self.task_repo.db.get(User, task_in.assignee_id)
-            if assignee is None:
-                raise AssigneeNotFoundError(task_in.assignee_id)
+            await self.validate_assignee_in_workspace(task.project_id, task_in.assignee_id)
 
         updated_task = await self.task_repo.update(db_obj=task, obj_in=task_in)
         await self.task_repo.db.commit()

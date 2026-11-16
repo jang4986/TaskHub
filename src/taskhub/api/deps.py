@@ -15,12 +15,16 @@ from taskhub.core.exceptions import (
 from taskhub.core.security import decode_access_token
 from taskhub.db.session import get_db
 from taskhub.models.user import User
+from taskhub.repositories.comment_repo import CommentRepository
+from taskhub.repositories.label_repo import LabelRepository
 from taskhub.repositories.project_repo import ProjectRepository
 from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.user_repo import UserRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.services.auth_service import AuthService
+from taskhub.services.comment_service import CommentService
+from taskhub.services.label_service import LabelService
 from taskhub.services.project_service import ProjectService
 from taskhub.services.task_service import TaskService
 from taskhub.services.workspace_service import WorkspaceService
@@ -91,6 +95,50 @@ def get_project_service(
     )
 
 
+def get_label_repo(db: Annotated[AsyncSession, Depends(get_db)]) -> LabelRepository:
+    return LabelRepository(db=db)
+
+
+def get_label_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    label_repo: Annotated[LabelRepository, Depends(get_label_repo)],
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repo)],
+    task_repo: Annotated[TaskRepository, Depends(get_task_repo)],
+    ws_repo: Annotated[WorkspaceRepository, Depends(get_workspace_repo)],
+    member_repo: Annotated[WorkspaceMemberRepository, Depends(get_workspace_member_repo)],
+) -> LabelService:
+    return LabelService(
+        db=db,
+        label_repo=label_repo,
+        project_repo=project_repo,
+        task_repo=task_repo,
+        ws_repo=ws_repo,
+        member_repo=member_repo,
+    )
+
+
+def get_comment_repo(db: Annotated[AsyncSession, Depends(get_db)]) -> CommentRepository:
+    return CommentRepository(db=db)
+
+
+def get_comment_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    comment_repo: Annotated[CommentRepository, Depends(get_comment_repo)],
+    task_repo: Annotated[TaskRepository, Depends(get_task_repo)],
+    project_repo: Annotated[ProjectRepository, Depends(get_project_repo)],
+    ws_repo: Annotated[WorkspaceRepository, Depends(get_workspace_repo)],
+    member_repo: Annotated[WorkspaceMemberRepository, Depends(get_workspace_member_repo)],
+) -> CommentService:
+    return CommentService(
+        db=db,
+        comment_repo=comment_repo,
+        task_repo=task_repo,
+        project_repo=project_repo,
+        ws_repo=ws_repo,
+        member_repo=member_repo,
+    )
+
+
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -140,11 +188,15 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 UserRepo = Annotated[UserRepository, Depends(get_user_repo)]
 TaskRepo = Annotated[TaskRepository, Depends(get_task_repo)]
 ProjectRepo = Annotated[ProjectRepository, Depends(get_project_repo)]
+LabelRepo = Annotated[LabelRepository, Depends(get_label_repo)]
+CommentRepo = Annotated[CommentRepository, Depends(get_comment_repo)]
 WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repo)]
 WorkspaceMemberRepo = Annotated[WorkspaceMemberRepository, Depends(get_workspace_member_repo)]
 AuthServ = Annotated[AuthService, Depends(get_auth_service)]
 TaskServ = Annotated[TaskService, Depends(get_task_service)]
 ProjectServ = Annotated[ProjectService, Depends(get_project_service)]
+LabelServ = Annotated[LabelService, Depends(get_label_service)]
+CommentServ = Annotated[CommentService, Depends(get_comment_service)]
 WorkspaceServ = Annotated[WorkspaceService, Depends(get_workspace_service)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentActiveUser = Annotated[User, Depends(get_current_active_user)]

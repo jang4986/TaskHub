@@ -38,7 +38,7 @@ class ProjectService:
         await require_workspace_role(
             workspace_id=workspace_id,
             user_id=user_id,
-            allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+            allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.EDITOR, WorkspaceRole.ADMIN},
             ws_repo=self.ws_repo,
             member_repo=self.member_repo,
             denied_detail="Only workspace OWNER or ADMIN can create projects",
@@ -114,7 +114,7 @@ class ProjectService:
                 await require_workspace_role(
                     workspace_id=project.workspace_id,
                     user_id=user_id,
-                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.EDITOR, WorkspaceRole.ADMIN},
                     ws_repo=self.ws_repo,
                     member_repo=self.member_repo,
                 )
@@ -132,6 +132,13 @@ class ProjectService:
             project.name = update_dict["name"]
         if "description" in update_dict:
             project.description = update_dict["description"]
+        if "status" in update_dict and update_dict["status"] is not None:
+            status_val = (
+                update_dict["status"].value
+                if hasattr(update_dict["status"], "value")
+                else str(update_dict["status"])
+            )
+            project.status = status_val
 
         self.db.add(project)
         await self.db.commit()
@@ -148,7 +155,7 @@ class ProjectService:
                 await require_workspace_role(
                     workspace_id=project.workspace_id,
                     user_id=user_id,
-                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
+                    allowed_roles={WorkspaceRole.OWNER},
                     ws_repo=self.ws_repo,
                     member_repo=self.member_repo,
                     denied_detail="Only workspace OWNER or ADMIN can delete this project",
