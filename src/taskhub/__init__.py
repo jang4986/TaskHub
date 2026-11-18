@@ -1,4 +1,5 @@
 """TaskHub - Task Management API."""
+
 import uvicorn
 
 from taskhub.main import app

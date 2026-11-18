@@ -1,4 +1,3 @@
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +30,7 @@ class TaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         limit: int = DEFAULT_PAGE_SIZE,
         status: TaskStatus | str | None = None,
         priority: TaskPriority | str | None = None,
+        assignee_id: int | None = None,
     ) -> tuple[list[Task], int]:
         filters = [Task.project_id == project_id]
 
@@ -41,6 +41,9 @@ class TaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
         if priority is not None:
             priority_val = priority.value if hasattr(priority, "value") else str(priority)
             filters.append(Task.priority == priority_val)
+
+        if assignee_id is not None:
+            filters.append(Task.assignee_id == assignee_id)
 
         # Count total matching tasks
         total_stmt = select(func.count()).select_from(Task).where(*filters)

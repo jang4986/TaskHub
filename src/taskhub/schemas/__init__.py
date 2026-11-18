@@ -1,3 +1,13 @@
+from taskhub.schemas.comment import (
+    CommentCreate,
+    CommentResponse,
+)
+from taskhub.schemas.label import (
+    LabelBase,
+    LabelCreate,
+    LabelResponse,
+    LabelUpdate,
+)
 from taskhub.schemas.project import (
     ProjectBase,
     ProjectCreate,
@@ -35,6 +45,12 @@ from taskhub.schemas.workspace_member import (
 )
 
 __all__ = [
+    "CommentCreate",
+    "CommentResponse",
+    "LabelBase",
+    "LabelCreate",
+    "LabelResponse",
+    "LabelUpdate",
     "ProjectBase",
     "ProjectCreate",
     "ProjectUpdate",

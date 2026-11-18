@@ -1,4 +1,3 @@
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,9 +24,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> tuple[list[Project], int]:
         count_stmt = (
-            select(func.count())
-            .select_from(Project)
-            .where(Project.workspace_id == workspace_id)
+            select(func.count()).select_from(Project).where(Project.workspace_id == workspace_id)
         )
         count_res = await self.db.execute(count_stmt)
         total = count_res.scalar() or 0
@@ -45,9 +42,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
 
     async def get_with_workspace(self, project_id: int) -> Project | None:
         stmt = (
-            select(Project)
-            .where(Project.id == project_id)
-            .options(selectinload(Project.workspace))
+            select(Project).where(Project.id == project_id).options(selectinload(Project.workspace))
         )
         res = await self.db.execute(stmt)
         return res.scalar_one_or_none()

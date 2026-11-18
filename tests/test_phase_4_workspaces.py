@@ -43,6 +43,7 @@ def test_list_my_workspaces(client: TestClient, stranger_headers: dict[str, str]
 
     # Stranger (User 4) is neither owner nor member of any workspace initially
     from taskhub.main import app
+
     with TestClient(app, headers=stranger_headers) as stranger_client:
         res_stranger = stranger_client.get("/api/v1/workspaces")
         assert res_stranger.status_code == 200
@@ -53,6 +54,7 @@ def test_list_my_workspaces(client: TestClient, stranger_headers: dict[str, str]
 
 def test_get_workspace_detail_forbidden_for_non_member(stranger_headers: dict[str, str]):
     from taskhub.main import app
+
     with TestClient(app, headers=stranger_headers) as stranger_client:
         res = stranger_client.get("/api/v1/workspaces/1")
         assert res.status_code == 403
@@ -115,6 +117,7 @@ def test_remove_member_owner_protection(client: TestClient):
 
 def test_delete_workspace_permission(client: TestClient, viewer_headers: dict[str, str]):
     from taskhub.main import app
+
     # Viewer (User 3) is a member, not owner of workspace 1
     with TestClient(app, headers=viewer_headers) as viewer_client:
         res_forbidden = viewer_client.delete("/api/v1/workspaces/1")

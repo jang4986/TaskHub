@@ -17,9 +17,7 @@ class Workspace(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    slug: Mapped[str | None] = mapped_column(
-        String(255), unique=True, index=True, nullable=True
-    )
+    slug: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     owner_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True

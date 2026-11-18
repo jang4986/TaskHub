@@ -17,7 +17,7 @@ class TaskLabel(Base):
         ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True
     )
     label_id: Mapped[int] = mapped_column(
-        ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True, index=True
     )
 
     # Relationships
