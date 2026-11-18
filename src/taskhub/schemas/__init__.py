@@ -22,11 +22,14 @@ from taskhub.schemas.task import (
     TaskStatus,
     TaskUpdate,
 )
-from taskhub.schemas.token import Token, TokenPayload
+from taskhub.schemas.token import RefreshTokenRequest, Token, TokenPayload
 from taskhub.schemas.user import (
+    ChangePasswordRequest,
+    MessageResponse,
     UserBase,
     UserCreate,
     UserLogin,
+    UserProfileUpdate,
     UserResponse,
     UserUpdate,
 )
@@ -45,16 +48,19 @@ from taskhub.schemas.workspace_member import (
 )
 
 __all__ = [
+    "ChangePasswordRequest",
     "CommentCreate",
     "CommentResponse",
     "LabelBase",
     "LabelCreate",
     "LabelResponse",
     "LabelUpdate",
+    "MessageResponse",
     "ProjectBase",
     "ProjectCreate",
     "ProjectUpdate",
     "ProjectResponse",
+    "RefreshTokenRequest",
     "TaskBase",
     "TaskCreate",
     "TaskPriority",
@@ -66,6 +72,7 @@ __all__ = [
     "UserBase",
     "UserCreate",
     "UserLogin",
+    "UserProfileUpdate",
     "UserResponse",
     "UserUpdate",
     "WorkspaceBase",

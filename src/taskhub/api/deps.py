@@ -28,6 +28,7 @@ from taskhub.services.comment_service import CommentService
 from taskhub.services.label_service import LabelService
 from taskhub.services.project_service import ProjectService
 from taskhub.services.task_service import TaskService
+from taskhub.services.user_service import UserService
 from taskhub.services.workspace_service import WorkspaceService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -91,6 +92,12 @@ def get_auth_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repo)],
 ) -> AuthService:
     return AuthService(user_repo=user_repo)
+
+
+def get_user_service(
+    user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+) -> UserService:
+    return UserService(user_repo=user_repo)
 
 
 def get_task_service(
@@ -181,6 +188,9 @@ async def get_current_user(
     if payload is None:
         raise CredentialsValidationError()
 
+    if payload.get("type") != "access":
+        raise CredentialsValidationError()
+
     user_id_str: str | None = payload.get("sub")
     if user_id_str is None:
         raise CredentialsValidationError()
@@ -227,6 +237,7 @@ CommentRepo = Annotated[CommentRepository, Depends(get_comment_repo)]
 WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repo)]
 WorkspaceMemberRepo = Annotated[WorkspaceMemberRepository, Depends(get_workspace_member_repo)]
 AuthServ = Annotated[AuthService, Depends(get_auth_service)]
+UserServ = Annotated[UserService, Depends(get_user_service)]
 TaskServ = Annotated[TaskService, Depends(get_task_service)]
 ProjectServ = Annotated[ProjectService, Depends(get_project_service)]
 LabelServ = Annotated[LabelService, Depends(get_label_service)]

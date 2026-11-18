@@ -152,6 +152,15 @@ class CredentialsValidationError(HTTPException):
         )
 
 
+class InvalidRefreshTokenError(HTTPException):
+    def __init__(self, detail: str = "Invalid or expired refresh token"):
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=detail,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 class FieldCannotBeNullError(HTTPException):
     def __init__(self, field_name: str):
         super().__init__(

@@ -31,3 +31,16 @@ class UserResponse(UserBase):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+
+class UserProfileUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    detail: str

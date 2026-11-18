@@ -77,7 +77,6 @@ async def list_comments(
         "Deletes a comment. Only the comment author (if still an active member) "
         "or workspace OWNER can delete comments."
     ),
-
     responses={
         status.HTTP_204_NO_CONTENT: {"description": "Comment deleted successfully"},
         status.HTTP_403_FORBIDDEN: {
