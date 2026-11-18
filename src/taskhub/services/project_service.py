@@ -155,7 +155,7 @@ class ProjectService:
                 await require_workspace_role(
                     workspace_id=project.workspace_id,
                     user_id=user_id,
-                    allowed_roles={WorkspaceRole.OWNER},
+                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
                     ws_repo=self.ws_repo,
                     member_repo=self.member_repo,
                     denied_detail="Only workspace OWNER or ADMIN can delete this project",

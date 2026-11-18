@@ -155,6 +155,88 @@ class CredentialsValidationError(HTTPException):
 class FieldCannotBeNullError(HTTPException):
     def __init__(self, field_name: str):
         super().__init__(
-            status_code=422,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Field '{field_name}' cannot be null",
+        )
+
+
+class LabelNotFoundError(HTTPException):
+    def __init__(self, label_id: int | None = None):
+        detail = (
+            f"Label with id {label_id} not found" if label_id is not None else "Label not found"
+        )
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+
+class LabelAlreadyExistsError(HTTPException):
+    def __init__(self, name: str):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Label with name '{name}' already exists in this project",
+        )
+
+
+class LabelAlreadyAttachedError(HTTPException):
+    def __init__(self, detail: str = "Label is already attached to this task"):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
+        )
+
+
+class LabelNotAttachedError(HTTPException):
+    def __init__(self, detail: str = "Label is not attached to this task"):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+
+class LabelProjectMismatchError(HTTPException):
+    def __init__(self, detail: str = "Label does not belong to the same project as the task"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class CommentNotFoundError(HTTPException):
+    def __init__(self, comment_id: int | None = None):
+        detail = (
+            f"Comment with id {comment_id} not found"
+            if comment_id is not None
+            else "Comment not found"
+        )
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+
+class CommentAccessDeniedError(HTTPException):
+    def __init__(self, detail: str = "You do not have permission to delete this comment"):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=detail,
+        )
+
+
+class AssigneeMustBeWorkspaceMemberError(HTTPException):
+    def __init__(
+        self, detail: str = "Assignee must be a member of the workspace containing this project"
+    ):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class AssigneeRoleNotAllowedError(HTTPException):
+    def __init__(self, detail: str = "Assignee must have write permissions and cannot be a VIEWER"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
         )

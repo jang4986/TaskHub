@@ -239,3 +239,149 @@ def test_comment_lifecycle_and_permissions(
     # Owner (User 1) deletes viewer's comment -> 204 No Content
     resp_owner_del = client.delete(f"/api/v1/comments/{c2_id}")
     assert resp_owner_del.status_code == 204
+
+
+def test_label_edge_cases_and_patch_validation(
+    client: TestClient,
+    editor_headers: dict[str, str],
+    stranger_headers: dict[str, str],
+):
+    with TestClient(app, headers=editor_headers) as editor_client:
+        # Create a label
+        resp = editor_client.post(
+            "/api/v1/projects/1/labels",
+            json={"name": "UI/UX", "color": "#123456"},
+        )
+        assert resp.status_code == 201
+        label_id = resp.json()["id"]
+
+        # Update label name and color
+        resp_update = editor_client.patch(
+            f"/api/v1/labels/{label_id}",
+            json={"name": "UI/UX Redesign", "color": "#654321"},
+        )
+        assert resp_update.status_code == 200
+        assert resp_update.json()["name"] == "UI/UX Redesign"
+        assert resp_update.json()["color"] == "#654321"
+
+        # PATCH with name: null -> 422
+        resp_null_name = editor_client.patch(
+            f"/api/v1/labels/{label_id}",
+            json={"name": None},
+        )
+        assert resp_null_name.status_code == 422
+
+        # PATCH with color: null -> 422
+        resp_null_color = editor_client.patch(
+            f"/api/v1/labels/{label_id}",
+            json={"color": None},
+        )
+        assert resp_null_color.status_code == 422
+
+        # Create a task to test detach on unattached label
+        t_res = editor_client.post("/api/v1/projects/1/tasks", json={"title": "Task Detach Test"})
+        task_id = t_res.json()["id"]
+
+        # Detach label that is not attached -> 404
+        resp_detach_not_found = editor_client.delete(f"/api/v1/tasks/{task_id}/labels/{label_id}")
+        assert resp_detach_not_found.status_code == 404
+
+        # Delete label -> 204
+        resp_delete = editor_client.delete(f"/api/v1/labels/{label_id}")
+        assert resp_delete.status_code == 204
+
+        # Deleting already deleted label -> 404
+        resp_delete_again = editor_client.delete(f"/api/v1/labels/{label_id}")
+        assert resp_delete_again.status_code == 404
+
+
+def test_assignee_viewer_restriction(
+    client: TestClient,
+    editor_headers: dict[str, str],
+):
+    with TestClient(app, headers=editor_headers) as editor_client:
+        # User 3 is VIEWER in Workspace 1
+        resp_create = editor_client.post(
+            "/api/v1/projects/1/tasks",
+            json={"title": "Viewer Assigned Task", "assignee_id": 3},
+        )
+        assert resp_create.status_code == 400
+        assert (
+            "cannot be a VIEWER" in resp_create.json()["detail"]
+            or "write permissions" in resp_create.json()["detail"]
+        )
+
+        # Create valid task then try updating assignee to VIEWER
+        t_valid = editor_client.post("/api/v1/projects/1/tasks", json={"title": "Valid Task"})
+        task_id = t_valid.json()["id"]
+
+        resp_update = editor_client.patch(
+            f"/api/v1/tasks/{task_id}",
+            json={"assignee_id": 3},
+        )
+        assert resp_update.status_code == 400
+
+
+def test_whitespace_trimming_and_uniqueness(
+    client: TestClient,
+    editor_headers: dict[str, str],
+):
+    with TestClient(app, headers=editor_headers) as editor_client:
+        # Create label with leading/trailing spaces
+        resp1 = editor_client.post(
+            "/api/v1/projects/1/labels",
+            json={"name": "  Refactor  ", "color": "#AABBCC"},
+        )
+        assert resp1.status_code == 201
+        assert resp1.json()["name"] == "Refactor"
+
+        # Create label with different spacing that trims to the same name -> 409 Conflict
+        resp2 = editor_client.post(
+            "/api/v1/projects/1/labels",
+            json={"name": "Refactor  ", "color": "#112233"},
+        )
+        assert resp2.status_code == 409
+
+        # Comment with only spaces -> 422
+        t = editor_client.post("/api/v1/projects/1/tasks", json={"title": "Trim Test Task"}).json()
+        resp_space_comment = editor_client.post(
+            f"/api/v1/tasks/{t['id']}/comments",
+            json={"content": "    "},
+        )
+        assert resp_space_comment.status_code == 422
+
+
+def test_cross_workspace_information_disclosure_prevention(
+    client: TestClient,
+    editor_headers: dict[str, str],
+    stranger_headers: dict[str, str],
+):
+    with TestClient(app, headers=editor_headers) as editor_client:
+        lbl = editor_client.post(
+            "/api/v1/projects/1/labels", json={"name": "Secret", "color": "#123123"}
+        ).json()
+        label_id = lbl["id"]
+
+        tsk = editor_client.post("/api/v1/projects/1/tasks", json={"title": "Secret Task"}).json()
+        task_id = tsk["id"]
+
+        cmt = editor_client.post(
+            f"/api/v1/tasks/{task_id}/comments", json={"content": "Secret note"}
+        ).json()
+        comment_id = cmt["id"]
+
+    with TestClient(app, headers=stranger_headers) as stranger_client:
+        # Stranger attempting to update or delete label in Project 1 gets 404 (not leaking 403)
+        assert (
+            stranger_client.patch(f"/api/v1/labels/{label_id}", json={"name": "Hacked"}).status_code
+            == 404
+        )
+        assert stranger_client.delete(f"/api/v1/labels/{label_id}").status_code == 404
+
+        # Stranger attempting to attach label to task gets 403
+        # (stopped at task project access check and cannot tell if label_id exists)
+        assert stranger_client.post(f"/api/v1/tasks/{task_id}/labels/{label_id}").status_code == 403
+        assert stranger_client.post(f"/api/v1/tasks/{task_id}/labels/99999").status_code == 403
+
+        # Stranger attempting to delete comment in Project 1 gets 404
+        assert stranger_client.delete(f"/api/v1/comments/{comment_id}").status_code == 404

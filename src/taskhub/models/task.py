@@ -64,9 +64,11 @@ class Task(Base):
         "TaskLabel",
         back_populates="task",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     comments: Mapped[list["Comment"]] = relationship(
         "Comment",
         back_populates="task",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )

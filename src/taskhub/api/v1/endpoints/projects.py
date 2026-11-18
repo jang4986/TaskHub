@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Response, status
 
-from taskhub.api.deps import CurrentActiveUser, ProjectServ, TaskServ
+from taskhub.api.deps import CurrentActiveUser, Pagination, ProjectServ, TaskServ
 from taskhub.core.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from taskhub.core.enums import TaskPriority, TaskStatus
 from taskhub.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
@@ -153,26 +153,16 @@ async def list_tasks_for_project(
     response: Response,
     current_user: CurrentActiveUser,
     service: TaskServ,
-    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    limit: Annotated[
-        int,
-        Query(
-            ge=1,
-            le=MAX_PAGE_SIZE,
-            description="Max number of items to return",
-        ),
-    ] = DEFAULT_PAGE_SIZE,
-    skip: Annotated[int | None, Query(ge=0, description="Number of items to skip")] = None,
+    pagination: Pagination,
     status: Annotated[TaskStatus | None, Query(description="Filter by status")] = None,
     priority: Annotated[TaskPriority | None, Query(description="Filter by priority")] = None,
     assignee_id: Annotated[int | None, Query(description="Filter by assignee")] = None,
 ) -> list[TaskResponse]:
-    offset = skip if skip is not None else (page - 1) * limit
     tasks, total = await service.get_project_tasks(
         project_id=project_id,
         current_user=current_user,
-        skip=offset,
-        limit=limit,
+        skip=pagination.offset,
+        limit=pagination.limit,
         status_filter=status,
         priority_filter=priority,
         assignee_id_filter=assignee_id,

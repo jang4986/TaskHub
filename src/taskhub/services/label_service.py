@@ -1,11 +1,18 @@
-from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskhub.core.enums import WorkspaceRole
 from taskhub.core.exceptions import (
+    FieldCannotBeNullError,
+    LabelAlreadyAttachedError,
+    LabelAlreadyExistsError,
+    LabelNotAttachedError,
+    LabelNotFoundError,
+    LabelProjectMismatchError,
     ProjectAccessDeniedError,
     ProjectNotFoundError,
     TaskNotFoundError,
+    WorkspaceAccessDeniedError,
 )
 from taskhub.models.label import Label
 from taskhub.repositories.label_repo import LabelRepository
@@ -15,6 +22,13 @@ from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.label import LabelCreate, LabelUpdate
 from taskhub.services.workspace_service import require_workspace_role
+
+WORKSPACE_LABEL_WRITE_ROLES = {
+    WorkspaceRole.OWNER,
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.EDITOR,
+    WorkspaceRole.MEMBER,
+}
 
 
 class LabelService:
@@ -46,10 +60,10 @@ class LabelService:
             await require_workspace_role(
                 workspace_id=project.workspace_id,
                 user_id=user_id,
-                allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.EDITOR, WorkspaceRole.ADMIN},
+                allowed_roles=WORKSPACE_LABEL_WRITE_ROLES,
                 ws_repo=self.ws_repo,
                 member_repo=self.member_repo,
-                denied_detail="Only workspace OWNER or EDITOR can modify labels",
+                denied_detail="Viewers do not have permission to modify labels",
             )
             return project
 
@@ -81,10 +95,7 @@ class LabelService:
 
         existing = await self.label_repo.get_by_project_and_name(project_id, data.name)
         if existing is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Label with name '{data.name}' already exists in this project",
-            )
+            raise LabelAlreadyExistsError(data.name)
 
         label = Label(
             project_id=project_id,
@@ -92,9 +103,13 @@ class LabelService:
             color=data.color,
         )
         self.db.add(label)
-        await self.db.commit()
-        await self.db.refresh(label)
-        return label
+        try:
+            await self.db.commit()
+            await self.db.refresh(label)
+            return label
+        except IntegrityError:
+            await self.db.rollback()
+            raise LabelAlreadyExistsError(data.name) from None
 
     async def list_labels(self, project_id: int, user_id: int) -> list[Label]:
         await self.check_project_read_access(project_id, user_id)
@@ -103,42 +118,49 @@ class LabelService:
     async def update_label(self, label_id: int, user_id: int, data: LabelUpdate) -> Label:
         label = await self.label_repo.get(label_id)
         if label is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Label with id {label_id} not found",
-            )
+            raise LabelNotFoundError(label_id)
 
-        await self.check_project_write_access(label.project_id, user_id)
+        try:
+            await self.check_project_write_access(label.project_id, user_id)
+        except (ProjectAccessDeniedError, WorkspaceAccessDeniedError):
+            # Outsider without workspace access -> return 404 to prevent ID enumeration
+            raise LabelNotFoundError(label_id) from None
 
         update_dict = data.model_dump(exclude_unset=True)
-        if "name" in update_dict and update_dict["name"] is not None:
+        if "name" in update_dict:
+            if update_dict["name"] is None:
+                raise FieldCannotBeNullError("name")
             new_name = update_dict["name"]
             if new_name != label.name:
                 existing = await self.label_repo.get_by_project_and_name(label.project_id, new_name)
                 if existing is not None:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail=f"Label with name '{new_name}' already exists in this project",
-                    )
-            label.name = new_name
+                    raise LabelAlreadyExistsError(new_name)
+                label.name = new_name
 
-        if "color" in update_dict and update_dict["color"] is not None:
+        if "color" in update_dict:
+            if update_dict["color"] is None:
+                raise FieldCannotBeNullError("color")
             label.color = update_dict["color"]
 
         self.db.add(label)
-        await self.db.commit()
-        await self.db.refresh(label)
-        return label
+        try:
+            await self.db.commit()
+            await self.db.refresh(label)
+            return label
+        except IntegrityError:
+            await self.db.rollback()
+            raise LabelAlreadyExistsError(label.name) from None
 
     async def delete_label(self, label_id: int, user_id: int) -> None:
         label = await self.label_repo.get(label_id)
         if label is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Label with id {label_id} not found",
-            )
+            raise LabelNotFoundError(label_id)
 
-        await self.check_project_write_access(label.project_id, user_id)
+        try:
+            await self.check_project_write_access(label.project_id, user_id)
+        except (ProjectAccessDeniedError, WorkspaceAccessDeniedError):
+            raise LabelNotFoundError(label_id) from None
+
         await self.label_repo.remove(label_id)
         await self.db.commit()
 
@@ -147,43 +169,45 @@ class LabelService:
         if task is None:
             raise TaskNotFoundError(task_id)
 
-        label = await self.label_repo.get(label_id)
-        if label is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Label with id {label_id} not found",
-            )
-
+        # Check write access on task's project FIRST before inspecting label
         await self.check_project_write_access(task.project_id, user_id)
 
+        label = await self.label_repo.get(label_id)
+        if label is None:
+            raise LabelNotFoundError(label_id)
+
         if task.project_id != label.project_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Label does not belong to the same project as the task",
-            )
+            raise LabelProjectMismatchError()
 
         if await self.label_repo.is_attached(task_id, label_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Label is already attached to this task",
-            )
+            raise LabelAlreadyAttachedError()
 
-        await self.label_repo.attach_to_task(task_id, label_id)
-        await self.db.commit()
-        return label
+        try:
+            await self.label_repo.attach_to_task(task_id, label_id)
+            await self.db.commit()
+            return label
+        except IntegrityError:
+            await self.db.rollback()
+            raise LabelAlreadyAttachedError() from None
+
 
     async def remove_label_from_task(self, task_id: int, label_id: int, user_id: int) -> None:
         task = await self.task_repo.get(task_id)
         if task is None:
             raise TaskNotFoundError(task_id)
 
+        # Check write access on task's project FIRST before inspecting label
+        await self.check_project_write_access(task.project_id, user_id)
+
         label = await self.label_repo.get(label_id)
         if label is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Label with id {label_id} not found",
-            )
+            raise LabelNotFoundError(label_id)
 
-        await self.check_project_write_access(task.project_id, user_id)
-        await self.label_repo.detach_from_task(task_id, label_id)
+        if task.project_id != label.project_id:
+            raise LabelProjectMismatchError()
+
+        detached = await self.label_repo.detach_from_task(task_id, label_id)
+        if not detached:
+            raise LabelNotAttachedError()
+
         await self.db.commit()

@@ -1,13 +1,27 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from taskhub.core.constants import (
+    COLOR_HEX_REGEX,
+    DEFAULT_LABEL_COLOR,
+    LABEL_NAME_MAX_LENGTH,
+)
 
 
 class LabelBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=LABEL_NAME_MAX_LENGTH)
     color: str = Field(
-        default="#3B82F6",
-        pattern=r"^#[0-9A-Fa-f]{6}$",
+        default=DEFAULT_LABEL_COLOR,
+        pattern=COLOR_HEX_REGEX,
         description="Mã màu HEX (ví dụ: #3B82F6)",
     )
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Label name cannot be empty or only whitespace")
+        return v
 
 
 class LabelCreate(LabelBase):
@@ -15,12 +29,21 @@ class LabelCreate(LabelBase):
 
 
 class LabelUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=100)
+    name: str | None = Field(None, min_length=1, max_length=LABEL_NAME_MAX_LENGTH)
     color: str | None = Field(
         None,
-        pattern=r"^#[0-9A-Fa-f]{6}$",
+        pattern=COLOR_HEX_REGEX,
         description="Mã màu HEX (ví dụ: #3B82F6)",
     )
+
+    @field_validator("name")
+    @classmethod
+    def strip_update_name(cls, v: str | None) -> str | None:
+        if v is not None:
+            v = v.strip()
+            if not v:
+                raise ValueError("Label name cannot be empty or only whitespace")
+        return v
 
 
 class LabelResponse(LabelBase):
