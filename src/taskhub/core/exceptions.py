@@ -188,7 +188,7 @@ class NewPasswordSameAsOldError(HTTPException):
 class FieldCannotBeBlankError(HTTPException):
     def __init__(self, field_name: str):
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{field_name} cannot be blank",
         )
 
@@ -196,7 +196,7 @@ class FieldCannotBeBlankError(HTTPException):
 class FieldCannotBeNullError(HTTPException):
     def __init__(self, field_name: str):
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Field '{field_name}' cannot be null",
         )
 
@@ -221,7 +221,7 @@ class LabelAlreadyExistsError(HTTPException):
 
 
 class LabelAlreadyAttachedError(HTTPException):
-    def __init__(self, detail: str = "Label is already attached to this task"):
+    def __init__(self, detail: str = "Label already attached to this task"):
         super().__init__(
             status_code=status.HTTP_409_CONFLICT,
             detail=detail,
@@ -237,7 +237,12 @@ class LabelNotAttachedError(HTTPException):
 
 
 class LabelProjectMismatchError(HTTPException):
-    def __init__(self, detail: str = "Label does not belong to the same project as the task"):
+    def __init__(
+        self,
+        detail: str = (
+            "Label does not belong to the same project (does not belong to the task's project)"
+        ),
+    ):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,
@@ -267,7 +272,7 @@ class CommentAccessDeniedError(HTTPException):
 
 class AssigneeMustBeWorkspaceMemberError(HTTPException):
     def __init__(
-        self, detail: str = "Assignee must be a member of the workspace containing this project"
+        self, detail: str = "Assignee must be a member of the project's workspace"
     ):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -277,6 +282,14 @@ class AssigneeMustBeWorkspaceMemberError(HTTPException):
 
 class AssigneeRoleNotAllowedError(HTTPException):
     def __init__(self, detail: str = "Assignee must have write permissions and cannot be a VIEWER"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class ProjectArchivedError(HTTPException):
+    def __init__(self, detail: str = "Cannot modify tasks in an archived project"):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,
