@@ -1,12 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
-from taskhub.core.enums import WorkspaceRole
+from taskhub.core.enums import ProjectStatus, WorkspaceRole
 from taskhub.core.exceptions import (
     ProjectAccessDeniedError,
     ProjectNotFoundError,
     WorkspaceAccessDeniedError,
-    WorkspaceNotFoundError,
 )
 from taskhub.models.project import Project
 from taskhub.repositories.project_repo import ProjectRepository
@@ -49,6 +48,7 @@ class ProjectService:
             owner_id=user_id,
             name=data.name,
             description=data.description,
+            status=ProjectStatus.ACTIVE.value,
         )
         self.db.add(project)
         await self.db.commit()
@@ -61,6 +61,7 @@ class ProjectService:
         user_id: int,
         skip: int = 0,
         limit: int = DEFAULT_PAGE_SIZE,
+        include_archived: bool = True,
     ) -> tuple[list[Project], int]:
         await require_workspace_role(
             workspace_id=workspace_id,
@@ -75,6 +76,7 @@ class ProjectService:
             workspace_id=workspace_id,
             skip=skip,
             limit=limit,
+            include_archived=include_archived,
         )
 
     async def get_project(self, project_id: int, user_id: int) -> Project:
@@ -106,23 +108,16 @@ class ProjectService:
         if project is None:
             raise ProjectNotFoundError(project_id)
 
-        has_permission = False
-        if project.owner_id == user_id:
-            has_permission = True
-        elif project.workspace_id is not None:
-            try:
-                await require_workspace_role(
-                    workspace_id=project.workspace_id,
-                    user_id=user_id,
-                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.EDITOR, WorkspaceRole.ADMIN},
-                    ws_repo=self.ws_repo,
-                    member_repo=self.member_repo,
-                )
-                has_permission = True
-            except (WorkspaceNotFoundError, WorkspaceAccessDeniedError):
-                has_permission = False
-
-        if not has_permission:
+        if project.workspace_id is not None:
+            await require_workspace_role(
+                workspace_id=project.workspace_id,
+                user_id=user_id,
+                allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.EDITOR, WorkspaceRole.ADMIN},
+                ws_repo=self.ws_repo,
+                member_repo=self.member_repo,
+                denied_detail="Only workspace OWNER or EDITOR can update this project",
+            )
+        elif project.owner_id != user_id:
             raise ProjectAccessDeniedError(
                 "Permission denied: You do not have permission to update this project"
             )
@@ -151,19 +146,14 @@ class ProjectService:
             raise ProjectNotFoundError(project_id)
 
         if project.workspace_id is not None:
-            try:
-                await require_workspace_role(
-                    workspace_id=project.workspace_id,
-                    user_id=user_id,
-                    allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.ADMIN},
-                    ws_repo=self.ws_repo,
-                    member_repo=self.member_repo,
-                    denied_detail="Only workspace OWNER or ADMIN can delete this project",
-                )
-            except (WorkspaceNotFoundError, WorkspaceAccessDeniedError):
-                raise WorkspaceAccessDeniedError(
-                    "Only workspace OWNER or ADMIN can delete this project"
-                ) from None
+            await require_workspace_role(
+                workspace_id=project.workspace_id,
+                user_id=user_id,
+                allowed_roles={WorkspaceRole.OWNER},
+                ws_repo=self.ws_repo,
+                member_repo=self.member_repo,
+                denied_detail="Only workspace OWNER or ADMIN can delete this project",
+            )
         else:
             raise WorkspaceAccessDeniedError(
                 "Only workspace OWNER or ADMIN can delete this project"

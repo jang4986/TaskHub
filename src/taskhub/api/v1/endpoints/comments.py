@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Response, status
+from fastapi import APIRouter, Path, Query, Response, status
 
-from taskhub.api.deps import CommentServ, CurrentActiveUser, Pagination
+from taskhub.api.deps import CommentServ, CurrentActiveUser
 from taskhub.schemas.comment import CommentCreate, CommentResponse
 
 router = APIRouter()
@@ -21,7 +21,7 @@ router = APIRouter()
         status.HTTP_201_CREATED: {"description": "Comment created successfully"},
         status.HTTP_403_FORBIDDEN: {"description": "Not a member of the workspace"},
         status.HTTP_404_NOT_FOUND: {"description": "Task not found"},
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {"description": "Comment content cannot be empty"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"description": "Comment content cannot be empty"},
     },
 )
 async def create_comment(
@@ -57,13 +57,23 @@ async def list_comments(
     response: Response,
     current_user: CurrentActiveUser,
     service: CommentServ,
-    pagination: Pagination,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=100,
+            description="Max number of items to return",
+        ),
+    ] = 20,
+    skip: Annotated[int | None, Query(ge=0, description="Number of items to skip")] = None,
 ) -> list[CommentResponse]:
-    comments, total = await service.list_comments(
+    offset = skip if skip is not None else (page - 1) * limit
+    comments, total = await service.list_task_comments(
         task_id=task_id,
         user_id=current_user.id,
-        skip=pagination.offset,
-        limit=pagination.limit,
+        skip=offset,
+        limit=limit,
     )
     response.headers["X-Total-Count"] = str(total)
     return [CommentResponse.model_validate(c) for c in comments]
