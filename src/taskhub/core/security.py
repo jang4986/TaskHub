@@ -24,6 +24,7 @@ def get_password_hash(password: str) -> str:
 def create_access_token(
     user_id: int | str,
     role: str,
+    token_version: int = 1,
     expires_delta: timedelta | None = None,
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
@@ -37,6 +38,7 @@ def create_access_token(
         "sub": str(user_id),
         "role": str(role),
         "type": "access",
+        "token_version": token_version,
         "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": expire,
@@ -52,7 +54,40 @@ def create_access_token(
     return encoded_jwt
 
 
-def decode_access_token(token: str) -> dict[str, Any] | None:
+def create_refresh_token(
+    user_id: int | str,
+    role: str,
+    token_version: int = 1,
+    expires_delta: timedelta | None = None,
+    extra_claims: dict[str, Any] | None = None,
+) -> str:
+    now = datetime.now(UTC)
+    if expires_delta:
+        expire = now + expires_delta
+    else:
+        expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+    claims: dict[str, Any] = {
+        "sub": str(user_id),
+        "role": str(role),
+        "type": "refresh",
+        "token_version": token_version,
+        "jti": str(uuid.uuid4()),
+        "iat": now,
+        "exp": expire,
+    }
+    if extra_claims:
+        claims.update(extra_claims)
+
+    encoded_jwt = jwt.encode(
+        claims,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+    return encoded_jwt
+
+
+def decode_token(token: str) -> dict[str, Any] | None:
     try:
         payload = jwt.decode(
             token,
@@ -62,3 +97,7 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
         return payload
     except PyJWTError:
         return None
+
+
+def decode_access_token(token: str) -> dict[str, Any] | None:
+    return decode_token(token)

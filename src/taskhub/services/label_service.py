@@ -190,7 +190,6 @@ class LabelService:
             await self.db.rollback()
             raise LabelAlreadyAttachedError() from None
 
-
     async def remove_label_from_task(self, task_id: int, label_id: int, user_id: int) -> None:
         task = await self.task_repo.get(task_id)
         if task is None:

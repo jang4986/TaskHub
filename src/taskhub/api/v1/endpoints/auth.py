@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from taskhub.api.deps import AuthServ, CurrentActiveUser
-from taskhub.schemas.token import Token
+from taskhub.schemas.token import RefreshTokenRequest, Token
 from taskhub.schemas.user import UserCreate, UserResponse
 
 router = APIRouter()
@@ -49,3 +49,31 @@ async def get_me(
     current_user: CurrentActiveUser,
 ) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.post(
+    "/auth/refresh",
+    response_model=Token,
+    summary="Refresh access token and rotate refresh token",
+)
+async def refresh_token(
+    refresh_in: RefreshTokenRequest,
+    auth_service: AuthServ,
+) -> Token:
+    return await auth_service.refresh_token(refresh_in.refresh_token)
+
+
+@router.post(
+    "/auth/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Logout user and revoke refresh token",
+)
+async def logout(
+    current_user: CurrentActiveUser,
+    refresh_in: RefreshTokenRequest,
+    auth_service: AuthServ,
+) -> None:
+    await auth_service.logout(
+        current_user=current_user,
+        refresh_token_str=refresh_in.refresh_token,
+    )

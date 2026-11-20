@@ -3,6 +3,7 @@ from taskhub.models.comment import Comment
 from taskhub.models.label import Label
 from taskhub.models.notification import Notification
 from taskhub.models.project import Project
+from taskhub.models.revoked_token import RevokedToken
 from taskhub.models.task import Task
 from taskhub.models.task_label import TaskLabel
 from taskhub.models.user import User
@@ -15,6 +16,7 @@ __all__ = [
     "Label",
     "Notification",
     "Project",
+    "RevokedToken",
     "Task",
     "TaskLabel",
     "User",
