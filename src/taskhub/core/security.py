@@ -24,6 +24,7 @@ def get_password_hash(password: str) -> str:
 def create_access_token(
     user_id: int | str,
     role: str,
+    token_version: int = 1,
     expires_delta: timedelta | None = None,
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
@@ -37,6 +38,7 @@ def create_access_token(
         "sub": str(user_id),
         "role": str(role),
         "type": "access",
+        "token_version": token_version,
         "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": expire,
@@ -55,6 +57,7 @@ def create_access_token(
 def create_refresh_token(
     user_id: int | str,
     role: str,
+    token_version: int = 1,
     expires_delta: timedelta | None = None,
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
@@ -68,6 +71,7 @@ def create_refresh_token(
         "sub": str(user_id),
         "role": str(role),
         "type": "refresh",
+        "token_version": token_version,
         "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": expire,
@@ -81,36 +85,6 @@ def create_refresh_token(
         algorithm=settings.ALGORITHM,
     )
     return encoded_jwt
-
-
-# In-memory revocation store: maps jti -> expiration timestamp (seconds)
-# Allows standalone Pytest runs without requiring external Redis cache
-_revoked_tokens: dict[str, float] = {}
-
-
-async def revoke_token(jti: str, exp: int | float | None = None) -> None:
-    now_ts = datetime.now(UTC).timestamp()
-    if exp is not None:
-        exp_ts = float(exp)
-    else:
-        exp_ts = now_ts + (settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
-    _revoked_tokens[jti] = exp_ts
-
-
-async def is_token_revoked(jti: str) -> bool:
-    now_ts = datetime.now(UTC).timestamp()
-    exp_ts = _revoked_tokens.get(jti)
-    if exp_ts is None:
-        return False
-    if exp_ts < now_ts:
-        _revoked_tokens.pop(jti, None)
-        return False
-    return True
-
-
-def clear_revoked_tokens() -> None:
-    """Helper to reset token revocation store between tests."""
-    _revoked_tokens.clear()
 
 
 def decode_token(token: str) -> dict[str, Any] | None:

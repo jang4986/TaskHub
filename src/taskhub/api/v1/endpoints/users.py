@@ -15,17 +15,6 @@ from taskhub.schemas.user import (
 router = APIRouter()
 
 
-@router.get(
-    "/users/me",
-    response_model=UserResponse,
-    summary="Get current user profile",
-)
-async def get_my_profile(
-    current_user: CurrentActiveUser,
-) -> UserResponse:
-    return UserResponse.model_validate(current_user)
-
-
 @router.patch(
     "/users/me",
     response_model=UserResponse,

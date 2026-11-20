@@ -1,8 +1,12 @@
 from typing import Any
 
-from fastapi import HTTPException, status
 from starlette.concurrency import run_in_threadpool
 
+from taskhub.core.exceptions import (
+    FieldCannotBeBlankError,
+    IncorrectCurrentPasswordError,
+    NewPasswordSameAsOldError,
+)
 from taskhub.core.security import get_password_hash, verify_password
 from taskhub.models.user import User
 from taskhub.repositories.user_repo import UserRepository
@@ -18,10 +22,7 @@ class UserService:
         if data.full_name is not None:
             trimmed = data.full_name.strip()
             if not trimmed:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="full_name cannot be blank",
-                )
+                raise FieldCannotBeBlankError("full_name")
             update_data["full_name"] = trimmed
 
         if update_data:
@@ -35,18 +36,17 @@ class UserService:
             verify_password, data.current_password, user.hashed_password
         )
         if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Incorrect current password",
-            )
+            raise IncorrectCurrentPasswordError()
 
         is_same = await run_in_threadpool(verify_password, data.new_password, user.hashed_password)
         if is_same:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="New password cannot be the same as current password",
-            )
+            raise NewPasswordSameAsOldError()
 
+        # Invalidate all prior tokens (Comment 2: token rotation on password change)
+        user.token_version += 1
         new_hashed = await run_in_threadpool(get_password_hash, data.new_password)
-        await self.user_repo.update(db_obj=user, obj_in={"hashed_password": new_hashed})
+        await self.user_repo.update(
+            db_obj=user,
+            obj_in={"hashed_password": new_hashed, "token_version": user.token_version},
+        )
         await self.user_repo.db.commit()

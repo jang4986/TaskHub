@@ -161,6 +161,38 @@ class InvalidRefreshTokenError(HTTPException):
         )
 
 
+class InvalidRefreshTokenBadRequestError(HTTPException):
+    def __init__(self, detail: str = "Invalid refresh token"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class IncorrectCurrentPasswordError(HTTPException):
+    def __init__(self, detail: str = "Incorrect current password"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class NewPasswordSameAsOldError(HTTPException):
+    def __init__(self, detail: str = "New password cannot be the same as current password"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class FieldCannotBeBlankError(HTTPException):
+    def __init__(self, field_name: str):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} cannot be blank",
+        )
+
+
 class FieldCannotBeNullError(HTTPException):
     def __init__(self, field_name: str):
         super().__init__(

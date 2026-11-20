@@ -19,6 +19,7 @@ from taskhub.models.user import User
 from taskhub.repositories.comment_repo import CommentRepository
 from taskhub.repositories.label_repo import LabelRepository
 from taskhub.repositories.project_repo import ProjectRepository
+from taskhub.repositories.revoked_token_repo import RevokedTokenRepository
 from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.user_repo import UserRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
@@ -88,10 +89,17 @@ def get_comment_repo(db: Annotated[AsyncSession, Depends(get_db)]) -> CommentRep
     return CommentRepository(db=db)
 
 
+def get_revoked_token_repo(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RevokedTokenRepository:
+    return RevokedTokenRepository(db=db)
+
+
 def get_auth_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+    revoked_token_repo: Annotated[RevokedTokenRepository, Depends(get_revoked_token_repo)],
 ) -> AuthService:
-    return AuthService(user_repo=user_repo)
+    return AuthService(user_repo=user_repo, revoked_token_repo=revoked_token_repo)
 
 
 def get_user_service(
@@ -205,6 +213,10 @@ async def get_current_user(
     if user is None:
         raise CredentialsValidationError()
 
+    token_version = payload.get("token_version")
+    if token_version is not None and token_version != user.token_version:
+        raise CredentialsValidationError()
+
     return user
 
 
@@ -230,6 +242,7 @@ def require_roles(allowed_roles: list[UserRole]) -> Callable:
 # Type aliases using Annotated for clean, modern injection
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 UserRepo = Annotated[UserRepository, Depends(get_user_repo)]
+RevokedTokenRepo = Annotated[RevokedTokenRepository, Depends(get_revoked_token_repo)]
 TaskRepo = Annotated[TaskRepository, Depends(get_task_repo)]
 ProjectRepo = Annotated[ProjectRepository, Depends(get_project_repo)]
 LabelRepo = Annotated[LabelRepository, Depends(get_label_repo)]

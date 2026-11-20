@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 
 from taskhub.core.enums import UserRole
 from taskhub.core.security import (
-    clear_revoked_tokens,
     create_refresh_token,
     decode_token,
 )
@@ -44,8 +43,6 @@ def test_login_returns_refresh_token(unauth_client: TestClient):
 
 def test_refresh_token_success_and_rotation(unauth_client: TestClient):
     """Test refresh token rotation: old refresh token is revoked upon rotation."""
-    clear_revoked_tokens()
-
     # 1. Login to get initial tokens
     login_resp = unauth_client.post(
         "/api/v1/auth/login",
@@ -131,8 +128,6 @@ def test_refresh_with_inactive_user_fails(unauth_client: TestClient):
 
 def test_logout_revokes_refresh_token(unauth_client: TestClient):
     """Test logout revokes the refresh token so subsequent refresh attempts fail with 401."""
-    clear_revoked_tokens()
-
     # 1. Login
     login_resp = unauth_client.post(
         "/api/v1/auth/login",
@@ -171,8 +166,6 @@ def test_logout_without_auth_fails(unauth_client: TestClient):
 
 def test_logout_with_another_user_refresh_token_fails(unauth_client: TestClient):
     """Test user cannot revoke another user's refresh token (fails with 400 Bad Request)."""
-    clear_revoked_tokens()
-
     # User 1 login
     resp1 = unauth_client.post(
         "/api/v1/auth/login",
@@ -205,7 +198,7 @@ def test_logout_with_another_user_refresh_token_fails(unauth_client: TestClient)
 
 
 def test_get_and_update_user_profile(unauth_client: TestClient):
-    """Test GET /users/me and PATCH /users/me for viewing and updating profile info."""
+    """Test GET /auth/me and PATCH /users/me for viewing and updating profile info."""
     login_resp = unauth_client.post(
         "/api/v1/auth/login",
         data={"username": "user1@example.com", "password": "password123"},
@@ -214,8 +207,8 @@ def test_get_and_update_user_profile(unauth_client: TestClient):
     access_token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    # 1. Get current profile
-    get_resp = unauth_client.get("/api/v1/users/me", headers=headers)
+    # 1. Get current profile via canonical /auth/me
+    get_resp = unauth_client.get("/api/v1/auth/me", headers=headers)
     assert get_resp.status_code == 200
     user_data = get_resp.json()
     assert user_data["email"] == "user1@example.com"
@@ -231,7 +224,7 @@ def test_get_and_update_user_profile(unauth_client: TestClient):
     assert patch_resp.json()["full_name"] == "Updated User One"
 
     # 3. Verify persistence
-    verify_resp = unauth_client.get("/api/v1/users/me", headers=headers)
+    verify_resp = unauth_client.get("/api/v1/auth/me", headers=headers)
     assert verify_resp.status_code == 200
     assert verify_resp.json()["full_name"] == "Updated User One"
 
@@ -343,3 +336,85 @@ def test_change_password_same_password(unauth_client: TestClient):
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "New password cannot be the same as current password"
+
+
+def test_password_change_invalidates_all_existing_tokens(unauth_client: TestClient):
+    """Test changing password increments token_version and invalidates prior tokens."""
+    # 1. Login user2 to obtain initial tokens
+    login_resp = unauth_client.post(
+        "/api/v1/auth/login",
+        data={"username": "user2@example.com", "password": "password123"},
+    )
+    assert login_resp.status_code == 200
+    old_tokens = login_resp.json()
+    old_access_token = old_tokens["access_token"]
+    old_refresh_token = old_tokens["refresh_token"]
+
+    # Verify old access token works before password change
+    me_resp = unauth_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {old_access_token}"},
+    )
+    assert me_resp.status_code == 200
+    assert me_resp.json()["email"] == "user2@example.com"
+
+    # 2. Change password
+    change_resp = unauth_client.post(
+        "/api/v1/users/change-password",
+        headers={"Authorization": f"Bearer {old_access_token}"},
+        json={
+            "current_password": "password123",
+            "new_password": "securepassword999",
+        },
+    )
+    assert change_resp.status_code == 200
+
+    # 3. Old access token MUST now fail with 401 (token_version mismatch)
+    old_access_check = unauth_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {old_access_token}"},
+    )
+    assert old_access_check.status_code == 401
+
+    # 4. Old refresh token MUST now fail with 401 (token_version mismatch)
+    old_refresh_check = unauth_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": old_refresh_token},
+    )
+    assert old_refresh_check.status_code == 401
+
+    # 5. Login with new password succeeds and gets new token_version
+    new_login = unauth_client.post(
+        "/api/v1/auth/login",
+        data={"username": "user2@example.com", "password": "securepassword999"},
+    )
+    assert new_login.status_code == 200
+    new_tokens = new_login.json()
+    new_access_token = new_tokens["access_token"]
+    new_refresh_token = new_tokens["refresh_token"]
+
+    # 6. New access token works
+    new_me = unauth_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {new_access_token}"},
+    )
+    assert new_me.status_code == 200
+
+    # 7. New refresh token works and can be refreshed
+    new_refresh = unauth_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": new_refresh_token},
+    )
+    assert new_refresh.status_code == 200
+    rotated_tokens = new_refresh.json()
+
+    # 8. Restore password back to password123 for test idempotency
+    restore_resp = unauth_client.post(
+        "/api/v1/users/change-password",
+        headers={"Authorization": f"Bearer {rotated_tokens['access_token']}"},
+        json={
+            "current_password": "securepassword999",
+            "new_password": "password123",
+        },
+    )
+    assert restore_resp.status_code == 200

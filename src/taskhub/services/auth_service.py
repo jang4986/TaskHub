@@ -1,4 +1,5 @@
-from fastapi import HTTPException, status
+from datetime import UTC, datetime
+
 from sqlalchemy.exc import IntegrityError
 from starlette.concurrency import run_in_threadpool
 
@@ -7,6 +8,7 @@ from taskhub.core.exceptions import (
     EmailAlreadyRegisteredError,
     InactiveUserError,
     InvalidCredentialsError,
+    InvalidRefreshTokenBadRequestError,
     InvalidRefreshTokenError,
 )
 from taskhub.core.security import (
@@ -15,19 +17,23 @@ from taskhub.core.security import (
     create_refresh_token,
     decode_token,
     get_password_hash,
-    is_token_revoked,
-    revoke_token,
     verify_password,
 )
 from taskhub.models.user import User
+from taskhub.repositories.revoked_token_repo import RevokedTokenRepository
 from taskhub.repositories.user_repo import UserRepository
 from taskhub.schemas.token import Token
 from taskhub.schemas.user import UserCreate
 
 
 class AuthService:
-    def __init__(self, user_repo: UserRepository) -> None:
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        revoked_token_repo: RevokedTokenRepository,
+    ) -> None:
         self.user_repo = user_repo
+        self.revoked_token_repo = revoked_token_repo
 
     async def register(self, user_in: UserCreate) -> User:
         existing_user = await self.user_repo.get_by_email(email=user_in.email)
@@ -67,13 +73,16 @@ class AuthService:
 
     def create_user_token(self, user: User) -> Token:
         role_val = user.role.value if hasattr(user.role, "value") else str(user.role)
+        token_version = getattr(user, "token_version", 1)
         access_token = create_access_token(
             user_id=user.id,
             role=role_val,
+            token_version=token_version,
         )
         refresh_token = create_refresh_token(
             user_id=user.id,
             role=role_val,
+            token_version=token_version,
         )
         return Token(
             access_token=access_token,
@@ -91,7 +100,7 @@ class AuthService:
             raise InvalidRefreshTokenError()
 
         jti = payload.get("jti")
-        if not jti or await is_token_revoked(jti):
+        if not jti or await self.revoked_token_repo.is_revoked(jti):
             raise InvalidRefreshTokenError()
 
         user_id_str = payload.get("sub")
@@ -110,9 +119,16 @@ class AuthService:
         if not user.is_active:
             raise InactiveUserError()
 
-        # Token Rotation: Revoke current refresh token jti
-        exp = payload.get("exp")
-        await revoke_token(jti, exp=exp)
+        # Token version check: ensures tokens issued prior to a password change are invalid
+        token_version = payload.get("token_version")
+        if token_version is not None and token_version != user.token_version:
+            raise InvalidRefreshTokenError()
+
+        # Token Rotation: Revoke current refresh token jti in DB
+        exp_ts = payload.get("exp")
+        expires_at = datetime.fromtimestamp(exp_ts, tz=UTC) if exp_ts else None
+        await self.revoked_token_repo.revoke(jti=jti, token_type="refresh", expires_at=expires_at)
+        await self.user_repo.db.commit()
 
         # Issue new token pair
         return self.create_user_token(user)
@@ -120,29 +136,19 @@ class AuthService:
     async def logout(self, current_user: User, refresh_token_str: str) -> None:
         payload = decode_token(refresh_token_str)
         if payload is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid refresh token",
-            )
+            raise InvalidRefreshTokenBadRequestError()
 
         if payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid refresh token",
-            )
+            raise InvalidRefreshTokenBadRequestError()
 
         if payload.get("sub") != str(current_user.id):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid refresh token",
-            )
+            raise InvalidRefreshTokenBadRequestError()
 
         jti = payload.get("jti")
         if not jti:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid refresh token",
-            )
+            raise InvalidRefreshTokenBadRequestError()
 
-        exp = payload.get("exp")
-        await revoke_token(jti, exp=exp)
+        exp_ts = payload.get("exp")
+        expires_at = datetime.fromtimestamp(exp_ts, tz=UTC) if exp_ts else None
+        await self.revoked_token_repo.revoke(jti=jti, token_type="refresh", expires_at=expires_at)
+        await self.user_repo.db.commit()

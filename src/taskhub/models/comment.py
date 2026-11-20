@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 class Comment(Base):
     __tablename__ = "comments"
     __table_args__ = (Index("ix_comments_task_created_id", "task_id", "created_at", "id"),)
-    __table_args__ = (Index("ix_comments_task_created_id", "task_id", "created_at", "id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True, index=True)
     task_id: Mapped[int] = mapped_column(
