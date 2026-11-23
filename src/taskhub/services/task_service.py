@@ -1,11 +1,10 @@
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
-from taskhub.core.enums import ProjectStatus, TaskPriority, TaskStatus, UserRole, WorkspaceRole
+from taskhub.core.enums import TaskPriority, TaskStatus, UserRole, WorkspaceRole
 from taskhub.core.exceptions import (
     AssigneeMustBeWorkspaceMemberError,
     AssigneeRoleNotAllowedError,
     InsufficientPrivilegesError,
     ProjectAccessDeniedError,
-    ProjectArchivedError,
     ProjectNotFoundError,
     TaskNotFoundError,
     UserNotFoundError,
@@ -19,6 +18,7 @@ from taskhub.repositories.user_repo import UserRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.task import TaskCreate, TaskUpdate
+from taskhub.services.project_service import ensure_project_writable
 
 
 class TaskService:
@@ -137,11 +137,7 @@ class TaskService:
             require_write=True,
         )
 
-        project_status_val = (
-            project.status.value if hasattr(project.status, "value") else str(project.status)
-        )
-        if project_status_val == ProjectStatus.ARCHIVED.value:
-            raise ProjectArchivedError()
+        ensure_project_writable(project)
 
         # Validate created_by user exists
         creator = await self.user_repo.get(created_by)
@@ -204,11 +200,7 @@ class TaskService:
             require_write=True,
         )
 
-        project_status_val = (
-            project.status.value if hasattr(project.status, "value") else str(project.status)
-        )
-        if project_status_val == ProjectStatus.ARCHIVED.value:
-            raise ProjectArchivedError()
+        ensure_project_writable(project)
 
         # Validate new assignee if provided
         if task_in.assignee_id is not None:
@@ -225,11 +217,7 @@ class TaskService:
             require_write=True,
         )
 
-        project_status_val = (
-            project.status.value if hasattr(project.status, "value") else str(project.status)
-        )
-        if project_status_val == ProjectStatus.ARCHIVED.value:
-            raise ProjectArchivedError()
+        ensure_project_writable(project)
 
         await self.task_repo.remove(id=task.id)
         await self.task_repo.db.commit()

@@ -235,3 +235,162 @@ def test_delete_comment_authorization(
         # Author (Editor) deletes their own comment -> 204
         resp_author_del = editor_client.delete(f"/api/v1/comments/{c2_id}")
         assert resp_author_del.status_code == 204
+
+
+def test_label_default_color_and_length_and_member_role(
+    client: TestClient,
+    user2_headers: dict[str, str],
+):
+    project_id = 1
+    # 1. WorkspaceRole.MEMBER (user 2) CAN create label (MEMBER role restored to label write roles)
+    with TestClient(app, headers=user2_headers) as member_client:
+        # Omitting color -> defaults to #3B82F6
+        resp_default_color = member_client.post(
+            f"/api/v1/projects/{project_id}/labels",
+            json={"name": "AutoColorLabel"},
+        )
+        assert resp_default_color.status_code == 201
+        data = resp_default_color.json()
+        assert data["name"] == "AutoColorLabel"
+        assert data["color"] == "#3B82F6"
+
+        # Label name length up to 100 succeeds
+        long_name_100 = "x" * 100
+        resp_100 = member_client.post(
+            f"/api/v1/projects/{project_id}/labels",
+            json={"name": long_name_100},
+        )
+        assert resp_100.status_code == 201
+        assert resp_100.json()["name"] == long_name_100
+
+        # Label name length 101 fails -> 422
+        long_name_101 = "y" * 101
+        resp_101 = member_client.post(
+            f"/api/v1/projects/{project_id}/labels",
+            json={"name": long_name_101},
+        )
+        assert resp_101.status_code == 422
+
+
+def test_archived_project_blocks_labels_and_comments_without_leaking_to_strangers(
+    client: TestClient,
+    editor_headers: dict[str, str],
+    stranger_headers: dict[str, str],
+):
+    with TestClient(app, headers=editor_headers) as editor_client:
+        # Create dedicated project for archive testing
+        resp_proj = editor_client.post(
+            "/api/v1/workspaces/1/projects",
+            json={"name": "Archived Label Project"},
+        )
+        assert resp_proj.status_code == 201
+        proj_id = resp_proj.json()["id"]
+
+        # Create task in this project
+        resp_task = editor_client.post(
+            f"/api/v1/projects/{proj_id}/tasks",
+            json={"title": "Task in soon-archived project"},
+        )
+        assert resp_task.status_code == 201
+        task_id = resp_task.json()["id"]
+
+        # Create label in this project
+        resp_lbl = editor_client.post(
+            f"/api/v1/projects/{proj_id}/labels",
+            json={"name": "PreArchiveLabel"},
+        )
+        assert resp_lbl.status_code == 201
+        lbl_id = resp_lbl.json()["id"]
+
+        # Create comment on the task
+        resp_cmt = editor_client.post(
+            f"/api/v1/tasks/{task_id}/comments",
+            json={"content": "Pre-archive comment"},
+        )
+        assert resp_cmt.status_code == 201
+        cmt_id = resp_cmt.json()["id"]
+
+        # Archive the project
+        resp_archive = editor_client.patch(
+            f"/api/v1/projects/{proj_id}",
+            json={"status": "ARCHIVED"},
+        )
+        assert resp_archive.status_code == 200
+
+    # 1. Stranger (User 4) tests: MUST NOT receive 400 "archived" (must receive 403 or 404)
+    with TestClient(app, headers=stranger_headers) as stranger_client:
+        # Create label -> 403 (not 400)
+        resp_s_create_lbl = stranger_client.post(
+            f"/api/v1/projects/{proj_id}/labels",
+            json={"name": "StrangerLabel"},
+        )
+        assert resp_s_create_lbl.status_code == 403
+        assert "Cannot modify labels in an archived project" not in resp_s_create_lbl.text
+
+        # Update label -> 404 (not 400)
+        resp_s_patch_lbl = stranger_client.patch(
+            f"/api/v1/labels/{lbl_id}",
+            json={"name": "StrangerUpdate"},
+        )
+        assert resp_s_patch_lbl.status_code == 404
+        assert "Cannot modify labels in an archived project" not in resp_s_patch_lbl.text
+
+        # Delete label -> 404 (not 400)
+        resp_s_del_lbl = stranger_client.delete(f"/api/v1/labels/{lbl_id}")
+        assert resp_s_del_lbl.status_code == 404
+
+        # Attach label -> 403 (not 400)
+        resp_s_attach = stranger_client.post(f"/api/v1/tasks/{task_id}/labels/{lbl_id}")
+        assert resp_s_attach.status_code == 403
+
+        # Create comment -> 403 (not 400)
+        resp_s_create_cmt = stranger_client.post(
+            f"/api/v1/tasks/{task_id}/comments",
+            json={"content": "Stranger comment"},
+        )
+        assert resp_s_create_cmt.status_code == 403
+
+        # Delete comment -> 404 (not 400)
+        resp_s_del_cmt = stranger_client.delete(f"/api/v1/comments/{cmt_id}")
+        assert resp_s_del_cmt.status_code == 404
+
+    # 2. Member/Editor tests: MUST receive 400 with archived error
+    with TestClient(app, headers=editor_headers) as editor_client:
+        # Create label on archived project -> 400
+        resp_create_fail = editor_client.post(
+            f"/api/v1/projects/{proj_id}/labels",
+            json={"name": "FailLabel"},
+        )
+        assert resp_create_fail.status_code == 400
+        assert "Cannot modify labels in an archived project" in resp_create_fail.json()["detail"]
+
+        # Update label on archived project -> 400
+        resp_update_fail = editor_client.patch(
+            f"/api/v1/labels/{lbl_id}",
+            json={"name": "NewNameFail"},
+        )
+        assert resp_update_fail.status_code == 400
+        assert "Cannot modify labels in an archived project" in resp_update_fail.json()["detail"]
+
+        # Delete label on archived project -> 400
+        resp_del_lbl_fail = editor_client.delete(f"/api/v1/labels/{lbl_id}")
+        assert resp_del_lbl_fail.status_code == 400
+        assert "Cannot modify labels in an archived project" in resp_del_lbl_fail.json()["detail"]
+
+        # Attach label on archived project -> 400
+        resp_attach_fail = editor_client.post(f"/api/v1/tasks/{task_id}/labels/{lbl_id}")
+        assert resp_attach_fail.status_code == 400
+        assert "Cannot modify labels in an archived project" in resp_attach_fail.json()["detail"]
+
+        # Create comment on archived project -> 400
+        resp_cmt_fail = editor_client.post(
+            f"/api/v1/tasks/{task_id}/comments",
+            json={"content": "Should fail comment"},
+        )
+        assert resp_cmt_fail.status_code == 400
+        assert "Cannot comment on tasks in an archived project" in resp_cmt_fail.json()["detail"]
+
+        # Delete comment on archived project -> 400
+        resp_del_cmt_fail = editor_client.delete(f"/api/v1/comments/{cmt_id}")
+        assert resp_del_cmt_fail.status_code == 400
+        assert "Cannot delete comments in an archived project" in resp_del_cmt_fail.json()["detail"]

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Response, status
 
-from taskhub.api.deps import CurrentActiveUser, ProjectServ
+from taskhub.api.deps import CurrentActiveUser, Pagination, ProjectServ
 from taskhub.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
 router = APIRouter()
@@ -41,23 +41,15 @@ async def list_workspace_projects(
     current_user: CurrentActiveUser,
     service: ProjectServ,
     workspace_id: Annotated[int, Path(ge=1)],
-    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    limit: Annotated[
-        int,
-        Query(
-            ge=1,
-            le=100,
-            description="Max number of items to return",
-        ),
-    ] = 20,
-    skip: Annotated[int | None, Query(ge=0, description="Number of items to skip")] = None,
+    pagination: Pagination,
+    include_archived: Annotated[bool, Query(description="Include archived projects")] = False,
 ) -> list[ProjectResponse]:
-    offset = skip if skip is not None else (page - 1) * limit
     projects, total = await service.list_projects(
         workspace_id=workspace_id,
         user_id=current_user.id,
-        skip=offset,
-        limit=limit,
+        skip=pagination.offset,
+        limit=pagination.limit,
+        include_archived=include_archived,
     )
     response.headers["X-Total-Count"] = str(total)
     return [ProjectResponse.model_validate(p) for p in projects]

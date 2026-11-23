@@ -1,8 +1,7 @@
-from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
-from taskhub.core.enums import ProjectStatus, WorkspaceRole
+from taskhub.core.enums import WorkspaceRole
 from taskhub.core.exceptions import (
     CommentAccessDeniedError,
     CommentNotFoundError,
@@ -19,6 +18,7 @@ from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.comment import CommentCreate
+from taskhub.services.project_service import ensure_project_writable
 from taskhub.services.workspace_service import require_workspace_role
 
 
@@ -71,15 +71,7 @@ class CommentService:
         data: CommentCreate,
     ) -> Comment:
         task, project = await self.check_task_read_access(task_id, author_id)
-
-        project_status_val = (
-            project.status.value if hasattr(project.status, "value") else str(project.status)
-        )
-        if project_status_val == ProjectStatus.ARCHIVED.value:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot comment on tasks in an archived project",
-            )
+        ensure_project_writable(project, "Cannot comment on tasks in an archived project")
 
         comment = Comment(
             task_id=task_id,
@@ -144,6 +136,8 @@ class CommentService:
                 raise ProjectAccessDeniedError()
         except (ProjectAccessDeniedError, WorkspaceAccessDeniedError):
             raise CommentNotFoundError(comment_id) from None
+
+        ensure_project_writable(project, "Cannot delete comments in an archived project")
 
         # Author can delete their own comment provided they are an active workspace member
         if comment.author_id == user_id:

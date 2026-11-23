@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response, status
+from fastapi import APIRouter, Path, Response, status
 
-from taskhub.api.deps import CommentServ, CurrentActiveUser
+from taskhub.api.deps import CommentServ, CurrentActiveUser, Pagination
 from taskhub.schemas.comment import CommentCreate, CommentResponse
 
 router = APIRouter()
@@ -57,23 +57,13 @@ async def list_comments(
     response: Response,
     current_user: CurrentActiveUser,
     service: CommentServ,
-    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    limit: Annotated[
-        int,
-        Query(
-            ge=1,
-            le=100,
-            description="Max number of items to return",
-        ),
-    ] = 20,
-    skip: Annotated[int | None, Query(ge=0, description="Number of items to skip")] = None,
+    pagination: Pagination,
 ) -> list[CommentResponse]:
-    offset = skip if skip is not None else (page - 1) * limit
     comments, total = await service.list_task_comments(
         task_id=task_id,
         user_id=current_user.id,
-        skip=offset,
-        limit=limit,
+        skip=pagination.offset,
+        limit=pagination.limit,
     )
     response.headers["X-Total-Count"] = str(total)
     return [CommentResponse.model_validate(c) for c in comments]

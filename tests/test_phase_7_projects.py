@@ -132,6 +132,77 @@ def test_update_and_archive_project(
         )
         assert resp_stranger.status_code == 403
 
+    # 4. While ARCHIVED, modifying name/description is BLOCKED -> 400
+    with TestClient(app, headers=editor_headers) as editor_client:
+        resp_blocked = editor_client.patch(
+            "/api/v1/projects/1",
+            json={"name": "Rename While Archived"},
+        )
+        assert resp_blocked.status_code == 400
+        assert "Cannot modify an archived project" in resp_blocked.json()["detail"]
+
+        # 5. Un-archive project back to ACTIVE -> 200
+        resp_unarchive = editor_client.patch(
+            "/api/v1/projects/1",
+            json={"status": ProjectStatus.ACTIVE.value},
+        )
+        assert resp_unarchive.status_code == 200
+        assert resp_unarchive.json()["status"] == ProjectStatus.ACTIVE.value
+
+        # 6. Now that it is ACTIVE, editing name works again -> 200
+        resp_active_update = editor_client.patch(
+            "/api/v1/projects/1",
+            json={"name": "Project Alpha Active Again"},
+        )
+        assert resp_active_update.status_code == 200
+        assert resp_active_update.json()["name"] == "Project Alpha Active Again"
+
+
+def test_list_workspace_projects_hides_archived_by_default(
+    client: TestClient,
+    editor_headers: dict[str, str],
+):
+    with TestClient(app, headers=editor_headers) as editor_client:
+        # Create a new project to archive
+        resp_create = editor_client.post(
+            "/api/v1/workspaces/1/projects",
+            json={"name": "Project To Archive", "description": "Temp"},
+        )
+        assert resp_create.status_code == 201
+        temp_proj_id = resp_create.json()["id"]
+
+        # Default list includes this newly created project
+        resp_list1 = editor_client.get("/api/v1/workspaces/1/projects")
+        assert resp_list1.status_code == 200
+        total_before = int(resp_list1.headers["X-Total-Count"])
+        ids_before = [p["id"] for p in resp_list1.json()]
+        assert temp_proj_id in ids_before
+
+        # Archive the project
+        resp_archive = editor_client.patch(
+            f"/api/v1/projects/{temp_proj_id}",
+            json={"status": ProjectStatus.ARCHIVED.value},
+        )
+        assert resp_archive.status_code == 200
+
+        # Default list (include_archived=False) MUST hide the archived project
+        resp_list2 = editor_client.get("/api/v1/workspaces/1/projects")
+        assert resp_list2.status_code == 200
+        total_after = int(resp_list2.headers["X-Total-Count"])
+        assert total_after == total_before - 1
+        ids_after = [p["id"] for p in resp_list2.json()]
+        assert temp_proj_id not in ids_after
+
+        # Explicit include_archived=true MUST return the archived project
+        resp_list_all = editor_client.get(
+            "/api/v1/workspaces/1/projects?include_archived=true"
+        )
+        assert resp_list_all.status_code == 200
+        total_all = int(resp_list_all.headers["X-Total-Count"])
+        assert total_all == total_before
+        ids_all = [p["id"] for p in resp_list_all.json()]
+        assert temp_proj_id in ids_all
+
 
 def test_delete_project_owner_only(
     client: TestClient,

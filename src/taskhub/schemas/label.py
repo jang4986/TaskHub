@@ -1,12 +1,16 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from taskhub.core.constants import COLOR_HEX_REGEX
+from taskhub.core.constants import (
+    COLOR_HEX_REGEX,
+    DEFAULT_LABEL_COLOR,
+    LABEL_NAME_MAX_LENGTH,
+)
 
 
 class LabelBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=50)
+    name: str = Field(..., min_length=1, max_length=LABEL_NAME_MAX_LENGTH)
     color: str = Field(
-        ...,
+        default=DEFAULT_LABEL_COLOR,
         pattern=COLOR_HEX_REGEX,
         description="Mã màu HEX (ví dụ: #10B981)",
     )
@@ -25,7 +29,7 @@ class LabelCreate(LabelBase):
 
 
 class LabelUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=50)
+    name: str | None = Field(default=None, min_length=1, max_length=LABEL_NAME_MAX_LENGTH)
     color: str | None = Field(
         default=None,
         pattern=COLOR_HEX_REGEX,

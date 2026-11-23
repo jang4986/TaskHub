@@ -22,11 +22,11 @@ class ProjectUpdate(BaseModel):
 
 class ProjectResponse(BaseModel):
     id: int
-    workspace_id: int
+    workspace_id: int | None = None
     name: str
     description: str | None = None
     status: ProjectStatus = ProjectStatus.ACTIVE
-    owner_id: int
+    owner_id: int | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

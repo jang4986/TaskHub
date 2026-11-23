@@ -22,7 +22,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         workspace_id: int,
         skip: int = 0,
         limit: int = 50,
-        include_archived: bool = True,
+        include_archived: bool = False,
     ) -> tuple[list[Project], int]:
         count_stmt = (
             select(func.count()).select_from(Project).where(Project.workspace_id == workspace_id)

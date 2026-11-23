@@ -1,8 +1,7 @@
-from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from taskhub.core.enums import ProjectStatus, WorkspaceRole
+from taskhub.core.enums import WorkspaceRole
 from taskhub.core.exceptions import (
     FieldCannotBeNullError,
     LabelAlreadyAttachedError,
@@ -13,6 +12,7 @@ from taskhub.core.exceptions import (
     ProjectAccessDeniedError,
     ProjectNotFoundError,
     TaskNotFoundError,
+    WorkspaceAccessDeniedError,
 )
 from taskhub.models.label import Label
 from taskhub.models.project import Project
@@ -22,12 +22,14 @@ from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.label import LabelCreate, LabelUpdate
+from taskhub.services.project_service import ensure_project_writable
 from taskhub.services.workspace_service import require_workspace_role
 
 WORKSPACE_LABEL_WRITE_ROLES = {
     WorkspaceRole.OWNER,
     WorkspaceRole.ADMIN,
     WorkspaceRole.EDITOR,
+    WorkspaceRole.MEMBER,
 }
 
 
@@ -53,19 +55,10 @@ class LabelService:
         if project is None:
             raise ProjectNotFoundError(project_id)
 
-        project_status_val = (
-            project.status.value if hasattr(project.status, "value") else str(project.status)
-        )
-        if project_status_val == ProjectStatus.ARCHIVED.value:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot modify labels in an archived project",
-            )
-
+        # Check permissions first to prevent leaking archive status to outsiders
         if project.owner_id == user_id:
-            return project
-
-        if project.workspace_id is not None:
+            pass
+        elif project.workspace_id is not None:
             await require_workspace_role(
                 workspace_id=project.workspace_id,
                 user_id=user_id,
@@ -74,9 +67,12 @@ class LabelService:
                 member_repo=self.member_repo,
                 denied_detail="Viewers do not have permission to modify labels",
             )
-            return project
+        else:
+            raise ProjectAccessDeniedError()
 
-        raise ProjectAccessDeniedError()
+        # Enforce project writable check only after permission check passes
+        ensure_project_writable(project, "Cannot modify labels in an archived project")
+        return project
 
     async def check_project_read_access(self, project_id: int, user_id: int) -> Project:
         project = await self.project_repo.get(project_id)
@@ -99,10 +95,38 @@ class LabelService:
 
         raise ProjectAccessDeniedError()
 
+    async def _get_label_for_write(self, label_id: int, user_id: int) -> tuple[Label, Project]:
+        label = await self.label_repo.get(label_id)
+        if label is None:
+            raise LabelNotFoundError(label_id)
+
+        project = await self.project_repo.get(label.project_id)
+        if project is None:
+            raise LabelNotFoundError(label_id)
+
+        if project.workspace_id is not None:
+            member = await self.member_repo.get_member(project.workspace_id, user_id)
+            if member is None and project.owner_id != user_id:
+                raise LabelNotFoundError(label_id)
+
+            if member is not None and project.owner_id != user_id:
+                member_role_val = (
+                    member.role.value if hasattr(member.role, "value") else str(member.role)
+                )
+                if member_role_val not in [r.value for r in WORKSPACE_LABEL_WRITE_ROLES]:
+                    raise WorkspaceAccessDeniedError(
+                        "Viewers do not have permission to modify labels"
+                    )
+        elif project.owner_id != user_id:
+            raise LabelNotFoundError(label_id)
+
+        ensure_project_writable(project, "Cannot modify labels in an archived project")
+        return label, project
+
     async def create_label(self, project_id: int, user_id: int, data: LabelCreate) -> Label:
         await self.check_project_write_access(project_id, user_id)
 
-        existing = await self.label_repo.get_by_name_in_project(project_id, data.name)
+        existing = await self.label_repo.get_by_project_and_name(project_id, data.name)
         if existing is not None:
             raise LabelAlreadyExistsError(data.name)
 
@@ -139,20 +163,7 @@ class LabelService:
         )
 
     async def update_label(self, label_id: int, user_id: int, data: LabelUpdate) -> Label:
-        label = await self.label_repo.get(label_id)
-        if label is None:
-            raise LabelNotFoundError(label_id)
-
-        project = await self.project_repo.get(label.project_id)
-        if project is None:
-            raise LabelNotFoundError(label_id)
-
-        if project.workspace_id is not None:
-            member = await self.member_repo.get_member(project.workspace_id, user_id)
-            if member is None and project.owner_id != user_id:
-                raise LabelNotFoundError(label_id)
-
-        await self.check_project_write_access(label.project_id, user_id)
+        label, _ = await self._get_label_for_write(label_id, user_id)
 
         update_dict = data.model_dump(exclude_unset=True)
         if "name" in update_dict:
@@ -160,7 +171,7 @@ class LabelService:
                 raise FieldCannotBeNullError("name")
             new_name = update_dict["name"]
             if new_name != label.name:
-                existing = await self.label_repo.get_by_name_in_project(label.project_id, new_name)
+                existing = await self.label_repo.get_by_project_and_name(label.project_id, new_name)
                 if existing is not None:
                     raise LabelAlreadyExistsError(new_name)
                 label.name = new_name
@@ -180,20 +191,7 @@ class LabelService:
             raise LabelAlreadyExistsError(label.name) from None
 
     async def delete_label(self, label_id: int, user_id: int) -> bool:
-        label = await self.label_repo.get(label_id)
-        if label is None:
-            raise LabelNotFoundError(label_id)
-
-        project = await self.project_repo.get(label.project_id)
-        if project is None:
-            raise LabelNotFoundError(label_id)
-
-        if project.workspace_id is not None:
-            member = await self.member_repo.get_member(project.workspace_id, user_id)
-            if member is None and project.owner_id != user_id:
-                raise LabelNotFoundError(label_id)
-
-        await self.check_project_write_access(label.project_id, user_id)
+        label, _ = await self._get_label_for_write(label_id, user_id)
         await self.label_repo.remove(label_id)
         await self.db.commit()
         return True
@@ -203,7 +201,7 @@ class LabelService:
         if task is None:
             raise TaskNotFoundError(task_id)
 
-        # Check write access on task's project FIRST before inspecting label
+        # Check write access on task's project FIRST before inspecting label or archive state
         await self.check_project_write_access(task.project_id, user_id)
 
         label = await self.label_repo.get(label_id)
@@ -217,7 +215,7 @@ class LabelService:
             raise LabelAlreadyAttachedError()
 
         try:
-            await self.label_repo.attach_label_to_task(task_id, label_id)
+            await self.label_repo.attach_to_task(task_id, label_id)
             await self.db.commit()
             return label
         except IntegrityError:
@@ -232,7 +230,7 @@ class LabelService:
         if task is None:
             raise TaskNotFoundError(task_id)
 
-        # Check write access on task's project FIRST before inspecting label
+        # Check write access on task's project FIRST before inspecting label or archive state
         await self.check_project_write_access(task.project_id, user_id)
 
         label = await self.label_repo.get(label_id)
@@ -242,7 +240,7 @@ class LabelService:
         if task.project_id != label.project_id:
             raise LabelProjectMismatchError()
 
-        detached = await self.label_repo.detach_label_from_task(task_id, label_id)
+        detached = await self.label_repo.detach_from_task(task_id, label_id)
         if not detached:
             raise LabelNotAttachedError()
 
