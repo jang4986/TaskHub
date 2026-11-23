@@ -6,7 +6,7 @@ from taskhub.schemas.user import UserResponse
 
 
 class CommentCreate(BaseModel):
-    content: str = Field(..., min_length=1, description="Nội dung bình luận")
+    content: str = Field(..., min_length=1, max_length=2000, description="Nội dung bình luận")
 
     @field_validator("content")
     @classmethod

@@ -18,6 +18,7 @@ from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.comment import CommentCreate
+from taskhub.services.project_service import ensure_project_writable
 from taskhub.services.workspace_service import require_workspace_role
 
 
@@ -69,7 +70,8 @@ class CommentService:
         author_id: int,
         data: CommentCreate,
     ) -> Comment:
-        await self.check_task_read_access(task_id, author_id)
+        task, project = await self.check_task_read_access(task_id, author_id)
+        ensure_project_writable(project, "Cannot comment on tasks in an archived project")
 
         comment = Comment(
             task_id=task_id,
@@ -82,7 +84,7 @@ class CommentService:
         loaded = await self.comment_repo.get_with_author(comment.id)
         return loaded or comment
 
-    async def list_comments(
+    async def list_task_comments(
         self,
         task_id: int,
         user_id: int,
@@ -92,7 +94,21 @@ class CommentService:
         await self.check_task_read_access(task_id, user_id)
         return await self.comment_repo.get_by_task_paginated(task_id, skip=skip, limit=limit)
 
-    async def delete_comment(self, comment_id: int, user_id: int) -> None:
+    async def list_comments(
+        self,
+        task_id: int,
+        user_id: int,
+        skip: int = 0,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> tuple[list[Comment], int]:
+        return await self.list_task_comments(
+            task_id=task_id,
+            user_id=user_id,
+            skip=skip,
+            limit=limit,
+        )
+
+    async def delete_comment(self, comment_id: int, user_id: int) -> bool:
         comment = await self.comment_repo.get(comment_id)
         if comment is None:
             raise CommentNotFoundError(comment_id)
@@ -119,14 +135,15 @@ class CommentService:
             elif project.owner_id != user_id:
                 raise ProjectAccessDeniedError()
         except (ProjectAccessDeniedError, WorkspaceAccessDeniedError):
-            # Outside user has no access to workspace -> 404 to avoid ID enumeration
             raise CommentNotFoundError(comment_id) from None
+
+        ensure_project_writable(project, "Cannot delete comments in an archived project")
 
         # Author can delete their own comment provided they are an active workspace member
         if comment.author_id == user_id:
             await self.comment_repo.remove(comment_id)
             await self.db.commit()
-            return
+            return True
 
         # Otherwise, only workspace OWNER (or personal project owner) can delete comments
         is_ws_owner = False
@@ -150,3 +167,4 @@ class CommentService:
 
         await self.comment_repo.remove(comment_id)
         await self.db.commit()
+        return True

@@ -2,7 +2,6 @@ from taskhub.core.constants import DEFAULT_PAGE_SIZE
 from taskhub.core.enums import TaskPriority, TaskStatus, UserRole, WorkspaceRole
 from taskhub.core.exceptions import (
     AssigneeMustBeWorkspaceMemberError,
-    AssigneeNotFoundError,
     AssigneeRoleNotAllowedError,
     InsufficientPrivilegesError,
     ProjectAccessDeniedError,
@@ -19,6 +18,7 @@ from taskhub.repositories.user_repo import UserRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.task import TaskCreate, TaskUpdate
+from taskhub.services.project_service import ensure_project_writable
 
 
 class TaskService:
@@ -96,7 +96,9 @@ class TaskService:
     async def validate_assignee_in_workspace(self, project: Project, assignee_id: int) -> None:
         assignee = await self.user_repo.get(assignee_id)
         if assignee is None:
-            raise AssigneeNotFoundError(assignee_id)
+            raise AssigneeMustBeWorkspaceMemberError(
+                "Assignee must be a member of the project's workspace"
+            )
 
         if project.workspace_id is not None:
             ws = await self.ws_repo.get(project.workspace_id)
@@ -104,7 +106,9 @@ class TaskService:
             member = await self.member_repo.get_member(project.workspace_id, assignee_id)
 
             if not (member is not None or is_ws_owner):
-                raise AssigneeMustBeWorkspaceMemberError()
+                raise AssigneeMustBeWorkspaceMemberError(
+                    "Assignee must be a member of the project's workspace"
+                )
 
             if member is not None and not is_ws_owner:
                 member_role_val = (
@@ -116,7 +120,7 @@ class TaskService:
             # Personal project without workspace: assignee must be project owner
             if project.owner_id is not None and assignee_id != project.owner_id:
                 raise AssigneeMustBeWorkspaceMemberError(
-                    "Assignee for personal projects must be the project owner"
+                    "Assignee must be a member of the project's workspace"
                 )
 
     async def create_task(
@@ -132,6 +136,8 @@ class TaskService:
             user=current_user,
             require_write=True,
         )
+
+        ensure_project_writable(project)
 
         # Validate created_by user exists
         creator = await self.user_repo.get(created_by)
@@ -194,6 +200,8 @@ class TaskService:
             require_write=True,
         )
 
+        ensure_project_writable(project)
+
         # Validate new assignee if provided
         if task_in.assignee_id is not None:
             await self.validate_assignee_in_workspace(project, task_in.assignee_id)
@@ -203,10 +211,13 @@ class TaskService:
         return updated_task
 
     async def delete_task(self, task_id: int, current_user: User) -> None:
-        task, _ = await self.check_task_access(
+        task, project = await self.check_task_access(
             task_id=task_id,
             user=current_user,
             require_write=True,
         )
+
+        ensure_project_writable(project)
+
         await self.task_repo.remove(id=task.id)
         await self.task_repo.db.commit()

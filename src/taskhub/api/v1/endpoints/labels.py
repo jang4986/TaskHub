@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, status
+from fastapi import APIRouter, Path, Response, status
 
-from taskhub.api.deps import CurrentActiveUser, LabelServ
+from taskhub.api.deps import CurrentActiveUser, LabelServ, Pagination
 from taskhub.schemas.label import LabelCreate, LabelResponse, LabelUpdate
 
 router = APIRouter()
@@ -24,7 +24,7 @@ router = APIRouter()
         status.HTTP_409_CONFLICT: {
             "description": "Label with this name already exists in the project"
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Validation error or invalid color format"
         },
     },
@@ -47,7 +47,7 @@ async def create_label(
     "/projects/{project_id}/labels",
     response_model=list[LabelResponse],
     summary="List labels of a project",
-    description="Retrieves all labels defined for the given project.",
+    description="Retrieves labels defined for the given project with pagination.",
     responses={
         status.HTTP_200_OK: {"description": "List of labels retrieved successfully"},
         status.HTTP_403_FORBIDDEN: {"description": "Not a member of this workspace"},
@@ -56,13 +56,18 @@ async def create_label(
 )
 async def list_labels(
     project_id: Annotated[int, Path(ge=1, description="Target Project ID")],
+    response: Response,
     current_user: CurrentActiveUser,
     service: LabelServ,
+    pagination: Pagination,
 ) -> list[LabelResponse]:
-    labels = await service.list_labels(
+    labels, total = await service.list_project_labels(
         project_id=project_id,
         user_id=current_user.id,
+        skip=pagination.offset,
+        limit=pagination.limit,
     )
+    response.headers["X-Total-Count"] = str(total)
     return [LabelResponse.model_validate(label) for label in labels]
 
 
@@ -76,7 +81,7 @@ async def list_labels(
         status.HTTP_403_FORBIDDEN: {"description": "Insufficient permissions to update label"},
         status.HTTP_404_NOT_FOUND: {"description": "Label not found or access denied"},
         status.HTTP_409_CONFLICT: {"description": "Label with new name already exists"},
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Field cannot be null or invalid format"
         },
     },
@@ -139,7 +144,7 @@ async def attach_label_to_task(
     current_user: CurrentActiveUser,
     service: LabelServ,
 ) -> LabelResponse:
-    label = await service.assign_label_to_task(
+    label = await service.add_label_to_task(
         task_id=task_id,
         label_id=label_id,
         user_id=current_user.id,
