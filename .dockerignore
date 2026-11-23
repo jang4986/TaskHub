@@ -1,0 +1,17 @@
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.git
+.gitignore
+*.db
+*.sqlite
+*.sqlite3
+*.pyc
+*.pyo
+*.pyd
+.env
+tests
+htmlcov
+.coverage

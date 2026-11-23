@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from taskhub.api.deps import CurrentActiveUser, UserRepo, UserServ, require_roles
 from taskhub.core.constants import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from taskhub.core.enums import UserRole
+from taskhub.schemas.common import ErrorResponse
 from taskhub.schemas.user import (
     ChangePasswordRequest,
     MessageResponse,
@@ -19,6 +20,12 @@ router = APIRouter()
     "/users/me",
     response_model=UserResponse,
     summary="Update current user profile",
+    responses={
+        status.HTTP_200_OK: {"description": "User profile updated successfully"},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Unauthorized"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Forbidden"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Not Found"},
+    },
 )
 async def update_my_profile(
     current_user: CurrentActiveUser,

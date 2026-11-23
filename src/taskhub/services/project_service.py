@@ -1,3 +1,5 @@
+from collections.abc import Collection
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
@@ -23,6 +25,34 @@ def ensure_project_writable(
     """Validate that the project is not in ARCHIVED status."""
     if project.status == ProjectStatus.ARCHIVED or project.status == ProjectStatus.ARCHIVED.value:
         raise ProjectArchivedError(detail)
+
+
+async def require_project_access(
+    project: Project,
+    user_id: int,
+    ws_repo: WorkspaceRepository,
+    member_repo: WorkspaceMemberRepository,
+    allowed_roles: Collection[WorkspaceRole | str] | None = None,
+    denied_detail: str | None = None,
+) -> None:
+    """Validate caller has access to project as direct owner or workspace member."""
+    if project.owner_id == user_id:
+        return
+
+    if project.workspace_id is not None:
+        await require_workspace_role(
+            workspace_id=project.workspace_id,
+            user_id=user_id,
+            allowed_roles=allowed_roles,
+            ws_repo=ws_repo,
+            member_repo=member_repo,
+            denied_detail=denied_detail,
+        )
+        return
+
+    raise ProjectAccessDeniedError(
+        denied_detail or "Permission denied: You do not have permission to access this project"
+    )
 
 
 class ProjectService:
@@ -94,17 +124,14 @@ class ProjectService:
         if project is None:
             raise ProjectNotFoundError(project_id)
 
-        if project.workspace_id is not None:
-            await require_workspace_role(
-                workspace_id=project.workspace_id,
-                user_id=user_id,
-                allowed_roles=None,
-                ws_repo=self.ws_repo,
-                member_repo=self.member_repo,
-                denied_detail="Not a member of this workspace",
-            )
-        elif project.owner_id != user_id:
-            raise ProjectAccessDeniedError()
+        await require_project_access(
+            project=project,
+            user_id=user_id,
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            allowed_roles=None,
+            denied_detail="Not a member of this workspace",
+        )
 
         return project
 
@@ -118,19 +145,14 @@ class ProjectService:
         if project is None:
             raise ProjectNotFoundError(project_id)
 
-        if project.workspace_id is not None:
-            await require_workspace_role(
-                workspace_id=project.workspace_id,
-                user_id=user_id,
-                allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.EDITOR, WorkspaceRole.ADMIN},
-                ws_repo=self.ws_repo,
-                member_repo=self.member_repo,
-                denied_detail="Only workspace OWNER or EDITOR can update this project",
-            )
-        elif project.owner_id != user_id:
-            raise ProjectAccessDeniedError(
-                "Permission denied: You do not have permission to update this project"
-            )
+        await require_project_access(
+            project=project,
+            user_id=user_id,
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            allowed_roles={WorkspaceRole.OWNER, WorkspaceRole.EDITOR, WorkspaceRole.ADMIN},
+            denied_detail="Only workspace OWNER or EDITOR can update this project",
+        )
 
         update_dict = data.model_dump(exclude_unset=True)
 

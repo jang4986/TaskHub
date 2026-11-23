@@ -4,6 +4,7 @@ from taskhub.api.v1.endpoints import (
     auth,
     comments,
     labels,
+    notifications,
     projects,
     tasks,
     users,
@@ -19,3 +20,4 @@ api_router.include_router(projects.router, tags=["Projects - Tasks"])
 api_router.include_router(tasks.router, tags=["Tasks"])
 api_router.include_router(labels.router, tags=["Labels"])
 api_router.include_router(comments.router, tags=["Comments"])
+api_router.include_router(notifications.router, tags=["Notifications"])

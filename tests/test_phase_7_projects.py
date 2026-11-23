@@ -194,9 +194,7 @@ def test_list_workspace_projects_hides_archived_by_default(
         assert temp_proj_id not in ids_after
 
         # Explicit include_archived=true MUST return the archived project
-        resp_list_all = editor_client.get(
-            "/api/v1/workspaces/1/projects?include_archived=true"
-        )
+        resp_list_all = editor_client.get("/api/v1/workspaces/1/projects?include_archived=true")
         assert resp_list_all.status_code == 200
         total_all = int(resp_list_all.headers["X-Total-Count"])
         assert total_all == total_before

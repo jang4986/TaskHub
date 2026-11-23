@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Path, Query, Response, status
 
 from taskhub.api.deps import CurrentActiveUser, Pagination, TaskServ
 from taskhub.core.enums import TaskPriority, TaskStatus
@@ -23,12 +23,14 @@ async def create_task_for_project(
     task_in: TaskCreate,
     current_user: CurrentActiveUser,
     service: TaskServ,
+    background_tasks: BackgroundTasks,
 ) -> TaskResponse:
     task = await service.create_task(
         project_id=project_id,
         created_by=current_user.id,
         task_in=task_in,
         current_user=current_user,
+        background_tasks=background_tasks,
     )
     return TaskResponse.model_validate(task)
 
@@ -48,7 +50,7 @@ async def list_tasks_for_project(
     priority: Annotated[TaskPriority | None, Query(description="Filter by priority")] = None,
     assignee_id: Annotated[int | None, Query(description="Filter by assignee")] = None,
 ) -> list[TaskResponse]:
-    tasks, total = await service.get_project_tasks(
+    tasks, total, is_cache_hit = await service.get_project_tasks(
         project_id=project_id,
         current_user=current_user,
         skip=pagination.offset,
@@ -58,6 +60,7 @@ async def list_tasks_for_project(
         assignee_id_filter=assignee_id,
     )
     response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Cache"] = "HIT" if is_cache_hit else "MISS"
     return [TaskResponse.model_validate(t) for t in tasks]
 
 
@@ -88,11 +91,13 @@ async def update_task(
     task_in: TaskUpdate,
     current_user: CurrentActiveUser,
     service: TaskServ,
+    background_tasks: BackgroundTasks,
 ) -> TaskResponse:
     task = await service.update_task(
         task_id=task_id,
         task_in=task_in,
         current_user=current_user,
+        background_tasks=background_tasks,
     )
     return TaskResponse.model_validate(task)
 

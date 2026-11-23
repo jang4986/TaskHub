@@ -9,7 +9,6 @@ from taskhub.core.exceptions import (
     ProjectNotFoundError,
     TaskNotFoundError,
     WorkspaceAccessDeniedError,
-    WorkspaceNotFoundError,
 )
 from taskhub.models.comment import Comment
 from taskhub.repositories.comment_repo import CommentRepository
@@ -18,8 +17,10 @@ from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.comment import CommentCreate
-from taskhub.services.project_service import ensure_project_writable
-from taskhub.services.workspace_service import require_workspace_role
+from taskhub.services.project_service import (
+    ensure_project_writable,
+    require_project_access,
+)
 
 
 class CommentService:
@@ -48,21 +49,15 @@ class CommentService:
         if project is None:
             raise ProjectNotFoundError(task.project_id)
 
-        if project.owner_id == user_id:
-            return task, project
-
-        if project.workspace_id is not None:
-            await require_workspace_role(
-                workspace_id=project.workspace_id,
-                user_id=user_id,
-                allowed_roles=None,
-                ws_repo=self.ws_repo,
-                member_repo=self.member_repo,
-                denied_detail="Not a member of this workspace",
-            )
-            return task, project
-
-        raise ProjectAccessDeniedError()
+        await require_project_access(
+            project=project,
+            user_id=user_id,
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            allowed_roles=None,
+            denied_detail="Not a member of this workspace",
+        )
+        return task, project
 
     async def create_comment(
         self,
@@ -123,17 +118,14 @@ class CommentService:
 
         # Verify caller has at least membership/read access to the project
         try:
-            if project.workspace_id is not None:
-                await require_workspace_role(
-                    workspace_id=project.workspace_id,
-                    user_id=user_id,
-                    allowed_roles=None,
-                    ws_repo=self.ws_repo,
-                    member_repo=self.member_repo,
-                    denied_detail="Not a member of this workspace",
-                )
-            elif project.owner_id != user_id:
-                raise ProjectAccessDeniedError()
+            await require_project_access(
+                project=project,
+                user_id=user_id,
+                ws_repo=self.ws_repo,
+                member_repo=self.member_repo,
+                allowed_roles=None,
+                denied_detail="Not a member of this workspace",
+            )
         except (ProjectAccessDeniedError, WorkspaceAccessDeniedError):
             raise CommentNotFoundError(comment_id) from None
 
@@ -151,15 +143,15 @@ class CommentService:
             is_ws_owner = True
         elif project.workspace_id is not None:
             try:
-                await require_workspace_role(
-                    workspace_id=project.workspace_id,
+                await require_project_access(
+                    project=project,
                     user_id=user_id,
-                    allowed_roles={WorkspaceRole.OWNER},
                     ws_repo=self.ws_repo,
                     member_repo=self.member_repo,
+                    allowed_roles={WorkspaceRole.OWNER},
                 )
                 is_ws_owner = True
-            except (WorkspaceAccessDeniedError, WorkspaceNotFoundError):
+            except (WorkspaceAccessDeniedError, ProjectAccessDeniedError):
                 is_ws_owner = False
 
         if not is_ws_owner:

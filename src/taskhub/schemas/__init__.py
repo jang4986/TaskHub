@@ -2,11 +2,18 @@ from taskhub.schemas.comment import (
     CommentCreate,
     CommentResponse,
 )
+from taskhub.schemas.common import ErrorResponse
 from taskhub.schemas.label import (
     LabelBase,
     LabelCreate,
     LabelResponse,
     LabelUpdate,
+)
+from taskhub.schemas.notification import (
+    NotificationCreate,
+    NotificationReadAllResponse,
+    NotificationResponse,
+    NotificationUpdate,
 )
 from taskhub.schemas.project import (
     ProjectBase,
@@ -51,11 +58,16 @@ __all__ = [
     "ChangePasswordRequest",
     "CommentCreate",
     "CommentResponse",
+    "ErrorResponse",
     "LabelBase",
     "LabelCreate",
     "LabelResponse",
     "LabelUpdate",
     "MessageResponse",
+    "NotificationCreate",
+    "NotificationReadAllResponse",
+    "NotificationResponse",
+    "NotificationUpdate",
     "ProjectBase",
     "ProjectCreate",
     "ProjectUpdate",

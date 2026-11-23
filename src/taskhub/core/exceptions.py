@@ -271,9 +271,7 @@ class CommentAccessDeniedError(HTTPException):
 
 
 class AssigneeMustBeWorkspaceMemberError(HTTPException):
-    def __init__(
-        self, detail: str = "Assignee must be a member of the project's workspace"
-    ):
+    def __init__(self, detail: str = "Assignee must be a member of the project's workspace"):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,
@@ -292,5 +290,29 @@ class ProjectArchivedError(HTTPException):
     def __init__(self, detail: str = "Cannot modify tasks in an archived project"):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class NotificationNotFoundError(HTTPException):
+    def __init__(self, notification_id: int | None = None):
+        detail = (
+            f"Notification with id {notification_id} not found"
+            if notification_id is not None
+            else "Notification not found"
+        )
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+
+class NotificationAccessDeniedError(HTTPException):
+    def __init__(
+        self,
+        detail: str = "Access forbidden: You do not have permission to access this notification",
+    ):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=detail,
         )

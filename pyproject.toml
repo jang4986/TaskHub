@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings>=2.16.2",
     "pyjwt[crypto]>=2.8.0",
     "python-multipart>=0.0.9",
+    "redis>=8.1.0",
     "sqlalchemy[asyncio]>=2.0",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -58,6 +59,15 @@ ignore = [
 [tool.mypy]
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.fastapi]
 entrypoint = "taskhub.main:app"
