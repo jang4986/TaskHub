@@ -9,6 +9,12 @@ from taskhub.schemas.label import (
     LabelResponse,
     LabelUpdate,
 )
+from taskhub.schemas.notification import (
+    NotificationCreate,
+    NotificationReadAllResponse,
+    NotificationResponse,
+    NotificationUpdate,
+)
 from taskhub.schemas.project import (
     ProjectBase,
     ProjectCreate,
@@ -58,6 +64,10 @@ __all__ = [
     "LabelResponse",
     "LabelUpdate",
     "MessageResponse",
+    "NotificationCreate",
+    "NotificationReadAllResponse",
+    "NotificationResponse",
+    "NotificationUpdate",
     "ProjectBase",
     "ProjectCreate",
     "ProjectUpdate",

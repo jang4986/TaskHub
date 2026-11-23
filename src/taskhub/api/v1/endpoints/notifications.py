@@ -3,7 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query, Response, status
 
 from taskhub.api.deps import CurrentActiveUser, NotificationServ, Pagination
-from taskhub.schemas.notification import NotificationResponse
+from taskhub.schemas.notification import (
+    NotificationReadAllResponse,
+    NotificationResponse,
+)
 
 router = APIRouter()
 
@@ -64,6 +67,7 @@ async def mark_notification_read(
 
 @router.post(
     "/notifications/read-all",
+    response_model=NotificationReadAllResponse,
     summary="Mark all unread notifications as read",
     description="Marks all unread notifications of the current user as read.",
     responses={
@@ -74,6 +78,6 @@ async def mark_notification_read(
 async def mark_all_notifications_read(
     current_user: CurrentActiveUser,
     service: NotificationServ,
-) -> dict[str, int]:
+) -> NotificationReadAllResponse:
     count = await service.mark_all_as_read(user_id=current_user.id)
-    return {"updated_count": count}
+    return NotificationReadAllResponse(updated_count=count)

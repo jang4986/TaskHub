@@ -3,8 +3,8 @@
 # ---------------------------------------------------------
 FROM python:3.12-slim AS builder
 
-# Install uv from official binary image
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Install uv with pinned version for reproducible builds
+COPY --from=ghcr.io/astral-sh/uv:0.4.30 /uv /bin/uv
 
 WORKDIR /app
 
@@ -37,6 +37,10 @@ COPY alembic/ /app/alembic/
 COPY alembic.ini /app/alembic.ini
 COPY pyproject.toml /app/pyproject.toml
 
+# Create non-root system user and adjust directory ownership
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser \
+    && chown -R appuser:appgroup /app
+
 # Set environment variables for runtime
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app/src:$PYTHONPATH" \
@@ -44,5 +48,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 EXPOSE 8000
 
-# Automatically run database migrations before starting the ASGI server
-CMD ["sh", "-c", "alembic upgrade head && uvicorn taskhub.main:app --host 0.0.0.0 --port 8000"]
+# Run container as non-root user
+USER appuser
+
+# Automatically run database migrations, then exec uvicorn as PID 1 to handle SIGTERM gracefully
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn taskhub.main:app --host 0.0.0.0 --port 8000"]

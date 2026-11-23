@@ -10,6 +10,7 @@ from taskhub.core.exceptions import (
     LabelNotAttachedError,
     LabelNotFoundError,
     LabelProjectMismatchError,
+    ProjectAccessDeniedError,
     ProjectNotFoundError,
     TaskNotFoundError,
     WorkspaceAccessDeniedError,
@@ -95,21 +96,23 @@ class LabelService:
         if project is None:
             raise LabelNotFoundError(label_id)
 
-        if project.workspace_id is not None:
-            member = await self.member_repo.get_member(project.workspace_id, user_id)
-            if member is None and project.owner_id != user_id:
-                raise LabelNotFoundError(label_id)
-
-            if member is not None and project.owner_id != user_id:
-                member_role_val = (
-                    member.role.value if hasattr(member.role, "value") else str(member.role)
-                )
-                if member_role_val not in [r.value for r in WORKSPACE_LABEL_WRITE_ROLES]:
-                    raise WorkspaceAccessDeniedError(
-                        "Viewers do not have permission to modify labels"
-                    )
-        elif project.owner_id != user_id:
-            raise LabelNotFoundError(label_id)
+        # Check permissions first; strangers get 404 (hiding label existence)
+        # but VIEWERs get 403 (they know the project, just lack write access)
+        try:
+            await require_project_access(
+                project=project,
+                user_id=user_id,
+                ws_repo=self.ws_repo,
+                member_repo=self.member_repo,
+                allowed_roles=WORKSPACE_LABEL_WRITE_ROLES,
+                denied_detail="Viewers do not have permission to modify labels",
+            )
+        except (ProjectAccessDeniedError, WorkspaceAccessDeniedError) as exc:
+            # Non-members receive 404 to hide label existence;
+            # members with insufficient role receive the original 403.
+            if "Not a member" in str(exc.detail):
+                raise LabelNotFoundError(label_id) from None
+            raise
 
         ensure_project_writable(project, "Cannot modify labels in an archived project")
         return label, project
