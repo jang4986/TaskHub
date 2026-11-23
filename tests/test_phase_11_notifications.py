@@ -45,9 +45,7 @@ def test_background_notification_on_create_task_with_assignee(
 
         notifs = resp_notif.json()
         assert isinstance(notifs, list)
-        matching = [
-            n for n in notifs if "Notification Background Test Task" in n["message"]
-        ]
+        matching = [n for n in notifs if "Notification Background Test Task" in n["message"]]
         assert len(matching) >= 1
         notif = matching[0]
         assert notif["user_id"] == assignee_id

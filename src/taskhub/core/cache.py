@@ -97,6 +97,4 @@ async def invalidate_project_tasks_cache(project_id: int) -> None:
         if keys:
             await client.delete(*keys)
     except (RedisError, Exception) as e:
-        logger.warning(
-            "Redis invalidation failed for project %s: %s", project_id, e
-        )
+        logger.warning("Redis invalidation failed for project %s: %s", project_id, e)

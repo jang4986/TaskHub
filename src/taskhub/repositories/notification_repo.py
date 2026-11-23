@@ -9,9 +9,7 @@ from taskhub.repositories.base import BaseRepository
 from taskhub.schemas.notification import NotificationCreate, NotificationUpdate
 
 
-class NotificationRepository(
-    BaseRepository[Notification, NotificationCreate, NotificationUpdate]
-):
+class NotificationRepository(BaseRepository[Notification, NotificationCreate, NotificationUpdate]):
     def __init__(self, db: AsyncSession) -> None:
         super().__init__(model=Notification, db=db)
 
@@ -23,9 +21,7 @@ class NotificationRepository(
         unread_only: bool = False,
     ) -> tuple[list[Notification], int]:
         count_stmt = (
-            select(func.count())
-            .select_from(Notification)
-            .where(Notification.user_id == user_id)
+            select(func.count()).select_from(Notification).where(Notification.user_id == user_id)
         )
         stmt = select(Notification).where(Notification.user_id == user_id)
 

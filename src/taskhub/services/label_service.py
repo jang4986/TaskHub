@@ -10,7 +10,6 @@ from taskhub.core.exceptions import (
     LabelNotAttachedError,
     LabelNotFoundError,
     LabelProjectMismatchError,
-    ProjectAccessDeniedError,
     ProjectNotFoundError,
     TaskNotFoundError,
     WorkspaceAccessDeniedError,
@@ -23,8 +22,10 @@ from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.label import LabelCreate, LabelUpdate
-from taskhub.services.project_service import ensure_project_writable
-from taskhub.services.workspace_service import require_workspace_role
+from taskhub.services.project_service import (
+    ensure_project_writable,
+    require_project_access,
+)
 
 WORKSPACE_LABEL_WRITE_ROLES = {
     WorkspaceRole.OWNER,
@@ -57,19 +58,14 @@ class LabelService:
             raise ProjectNotFoundError(project_id)
 
         # Check permissions first to prevent leaking archive status to outsiders
-        if project.owner_id == user_id:
-            pass
-        elif project.workspace_id is not None:
-            await require_workspace_role(
-                workspace_id=project.workspace_id,
-                user_id=user_id,
-                allowed_roles=WORKSPACE_LABEL_WRITE_ROLES,
-                ws_repo=self.ws_repo,
-                member_repo=self.member_repo,
-                denied_detail="Viewers do not have permission to modify labels",
-            )
-        else:
-            raise ProjectAccessDeniedError()
+        await require_project_access(
+            project=project,
+            user_id=user_id,
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            allowed_roles=WORKSPACE_LABEL_WRITE_ROLES,
+            denied_detail="Viewers do not have permission to modify labels",
+        )
 
         # Enforce project writable check only after permission check passes
         ensure_project_writable(project, "Cannot modify labels in an archived project")
@@ -80,21 +76,15 @@ class LabelService:
         if project is None:
             raise ProjectNotFoundError(project_id)
 
-        if project.owner_id == user_id:
-            return project
-
-        if project.workspace_id is not None:
-            await require_workspace_role(
-                workspace_id=project.workspace_id,
-                user_id=user_id,
-                allowed_roles=None,
-                ws_repo=self.ws_repo,
-                member_repo=self.member_repo,
-                denied_detail="Not a member of this workspace",
-            )
-            return project
-
-        raise ProjectAccessDeniedError()
+        await require_project_access(
+            project=project,
+            user_id=user_id,
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            allowed_roles=None,
+            denied_detail="Not a member of this workspace",
+        )
+        return project
 
     async def _get_label_for_write(self, label_id: int, user_id: int) -> tuple[Label, Project]:
         label = await self.label_repo.get(label_id)

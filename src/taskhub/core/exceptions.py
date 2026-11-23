@@ -271,9 +271,7 @@ class CommentAccessDeniedError(HTTPException):
 
 
 class AssigneeMustBeWorkspaceMemberError(HTTPException):
-    def __init__(
-        self, detail: str = "Assignee must be a member of the project's workspace"
-    ):
+    def __init__(self, detail: str = "Assignee must be a member of the project's workspace"):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,

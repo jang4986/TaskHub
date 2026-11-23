@@ -213,9 +213,7 @@ class TaskService:
             assignee_id=assignee_id_filter,
         )
 
-        items_serialized = [
-            TaskResponse.model_validate(t).model_dump(mode="json") for t in tasks
-        ]
+        items_serialized = [TaskResponse.model_validate(t).model_dump(mode="json") for t in tasks]
         await set_cache(cache_key, {"items": items_serialized, "total": total})
 
         return list(tasks), total, False

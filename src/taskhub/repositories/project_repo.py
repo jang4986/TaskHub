@@ -36,11 +36,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
         count_res = await self.db.execute(count_stmt)
         total = count_res.scalar() or 0
 
-        stmt = (
-            stmt.order_by(Project.created_at.desc(), Project.id.desc())
-            .offset(skip)
-            .limit(limit)
-        )
+        stmt = stmt.order_by(Project.created_at.desc(), Project.id.desc()).offset(skip).limit(limit)
         res = await self.db.execute(stmt)
         items = list(res.scalars().all())
         return items, total

@@ -18,7 +18,10 @@ from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.schemas.comment import CommentCreate
-from taskhub.services.project_service import ensure_project_writable
+from taskhub.services.project_service import (
+    ensure_project_writable,
+    require_project_access,
+)
 from taskhub.services.workspace_service import require_workspace_role
 
 
@@ -48,21 +51,15 @@ class CommentService:
         if project is None:
             raise ProjectNotFoundError(task.project_id)
 
-        if project.owner_id == user_id:
-            return task, project
-
-        if project.workspace_id is not None:
-            await require_workspace_role(
-                workspace_id=project.workspace_id,
-                user_id=user_id,
-                allowed_roles=None,
-                ws_repo=self.ws_repo,
-                member_repo=self.member_repo,
-                denied_detail="Not a member of this workspace",
-            )
-            return task, project
-
-        raise ProjectAccessDeniedError()
+        await require_project_access(
+            project=project,
+            user_id=user_id,
+            ws_repo=self.ws_repo,
+            member_repo=self.member_repo,
+            allowed_roles=None,
+            denied_detail="Not a member of this workspace",
+        )
+        return task, project
 
     async def create_comment(
         self,
