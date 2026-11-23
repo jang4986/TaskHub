@@ -18,6 +18,7 @@ from taskhub.db.session import get_db
 from taskhub.models.user import User
 from taskhub.repositories.comment_repo import CommentRepository
 from taskhub.repositories.label_repo import LabelRepository
+from taskhub.repositories.notification_repo import NotificationRepository
 from taskhub.repositories.project_repo import ProjectRepository
 from taskhub.repositories.revoked_token_repo import RevokedTokenRepository
 from taskhub.repositories.task_repo import TaskRepository
@@ -27,6 +28,7 @@ from taskhub.repositories.workspace_repo import WorkspaceRepository
 from taskhub.services.auth_service import AuthService
 from taskhub.services.comment_service import CommentService
 from taskhub.services.label_service import LabelService
+from taskhub.services.notification_service import NotificationService
 from taskhub.services.project_service import ProjectService
 from taskhub.services.task_service import TaskService
 from taskhub.services.user_service import UserService
@@ -93,6 +95,12 @@ def get_revoked_token_repo(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RevokedTokenRepository:
     return RevokedTokenRepository(db=db)
+
+
+def get_notification_repo(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NotificationRepository:
+    return NotificationRepository(db=db)
 
 
 def get_auth_service(
@@ -188,6 +196,13 @@ def get_comment_service(
     )
 
 
+def get_notification_service(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    notification_repo: Annotated[NotificationRepository, Depends(get_notification_repo)],
+) -> NotificationService:
+    return NotificationService(db=db, notification_repo=notification_repo)
+
+
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -256,6 +271,8 @@ ProjectServ = Annotated[ProjectService, Depends(get_project_service)]
 LabelServ = Annotated[LabelService, Depends(get_label_service)]
 CommentServ = Annotated[CommentService, Depends(get_comment_service)]
 WorkspaceServ = Annotated[WorkspaceService, Depends(get_workspace_service)]
+NotificationRepo = Annotated[NotificationRepository, Depends(get_notification_repo)]
+NotificationServ = Annotated[NotificationService, Depends(get_notification_service)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentActiveUser = Annotated[User, Depends(get_current_active_user)]
 Pagination = Annotated[PaginationParams, Depends()]

@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Path, Query, Response, status
 
 from taskhub.api.deps import CurrentActiveUser, Pagination, TaskServ
 from taskhub.core.enums import TaskPriority, TaskStatus
 from taskhub.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from taskhub.services.notification_service import send_task_assigned_notification
 
 router = APIRouter()
 
@@ -23,6 +24,7 @@ async def create_task_for_project(
     task_in: TaskCreate,
     current_user: CurrentActiveUser,
     service: TaskServ,
+    background_tasks: BackgroundTasks,
 ) -> TaskResponse:
     task = await service.create_task(
         project_id=project_id,
@@ -30,6 +32,13 @@ async def create_task_for_project(
         task_in=task_in,
         current_user=current_user,
     )
+    if task.assignee_id is not None:
+        background_tasks.add_task(
+            send_task_assigned_notification,
+            task.assignee_id,
+            task.id,
+            task.title,
+        )
     return TaskResponse.model_validate(task)
 
 
@@ -89,12 +98,23 @@ async def update_task(
     task_in: TaskUpdate,
     current_user: CurrentActiveUser,
     service: TaskServ,
+    background_tasks: BackgroundTasks,
 ) -> TaskResponse:
+    existing_task = await service.get_task(task_id=task_id, current_user=current_user)
+    old_assignee_id = existing_task.assignee_id
+
     task = await service.update_task(
         task_id=task_id,
         task_in=task_in,
         current_user=current_user,
     )
+    if task.assignee_id is not None and task.assignee_id != old_assignee_id:
+        background_tasks.add_task(
+            send_task_assigned_notification,
+            task.assignee_id,
+            task.id,
+            task.title,
+        )
     return TaskResponse.model_validate(task)
 
 
