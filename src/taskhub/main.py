@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from taskhub.api.v1.router import api_router
+from taskhub.core.cache import close_redis
 from taskhub.core.config import settings
 from taskhub.db.session import engine
 
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
     await engine.dispose()
+    await close_redis()
 
 
 app = FastAPI(

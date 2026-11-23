@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     DATABASE_URL: str = "sqlite+aiosqlite:///./taskhub.db"
 
+    # Redis Cache
+    REDIS_URL: str = "redis://localhost:6379/0"
+    CACHE_TTL_SECONDS: int = 300
+
     # Security & JWT (Loaded strictly from environment / .env without hardcoded default)
     SECRET_KEY: str
     ALGORITHM: str = "HS256"

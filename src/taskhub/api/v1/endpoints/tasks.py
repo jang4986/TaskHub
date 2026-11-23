@@ -48,7 +48,7 @@ async def list_tasks_for_project(
     priority: Annotated[TaskPriority | None, Query(description="Filter by priority")] = None,
     assignee_id: Annotated[int | None, Query(description="Filter by assignee")] = None,
 ) -> list[TaskResponse]:
-    tasks, total = await service.get_project_tasks(
+    tasks, total, is_cache_hit = await service.get_project_tasks(
         project_id=project_id,
         current_user=current_user,
         skip=pagination.offset,
@@ -58,6 +58,7 @@ async def list_tasks_for_project(
         assignee_id_filter=assignee_id,
     )
     response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Cache"] = "HIT" if is_cache_hit else "MISS"
     return [TaskResponse.model_validate(t) for t in tasks]
 
 

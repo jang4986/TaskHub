@@ -1,3 +1,11 @@
+from typing import Any
+
+from taskhub.core.cache import (
+    build_project_tasks_cache_key,
+    get_cache,
+    invalidate_project_tasks_cache,
+    set_cache,
+)
 from taskhub.core.constants import DEFAULT_PAGE_SIZE
 from taskhub.core.enums import TaskPriority, TaskStatus, UserRole, WorkspaceRole
 from taskhub.core.exceptions import (
@@ -17,7 +25,7 @@ from taskhub.repositories.task_repo import TaskRepository
 from taskhub.repositories.user_repo import UserRepository
 from taskhub.repositories.workspace_member_repo import WorkspaceMemberRepository
 from taskhub.repositories.workspace_repo import WorkspaceRepository
-from taskhub.schemas.task import TaskCreate, TaskUpdate
+from taskhub.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from taskhub.services.project_service import ensure_project_writable
 
 
@@ -154,6 +162,7 @@ class TaskService:
             obj_in=task_in,
         )
         await self.task_repo.db.commit()
+        await invalidate_project_tasks_cache(project_id)
         return task
 
     async def get_task(self, task_id: int, current_user: User) -> Task:
@@ -173,13 +182,29 @@ class TaskService:
         status_filter: TaskStatus | str | None = None,
         priority_filter: TaskPriority | str | None = None,
         assignee_id_filter: int | None = None,
-    ) -> tuple[list[Task], int]:
+    ) -> tuple[list[Any], int, bool]:
         await self.check_project_access(
             project_id=project_id,
             user=current_user,
             require_write=False,
         )
-        return await self.task_repo.get_by_project(
+
+        cache_key = build_project_tasks_cache_key(
+            project_id=project_id,
+            status=status_filter,
+            priority=priority_filter,
+            assignee_id=assignee_id_filter,
+            offset=skip,
+            limit=limit,
+        )
+
+        cached_data = await get_cache(cache_key)
+        if cached_data is not None and isinstance(cached_data, dict):
+            items = cached_data.get("items", [])
+            total = cached_data.get("total", 0)
+            return items, total, True
+
+        tasks, total = await self.task_repo.get_by_project(
             project_id=project_id,
             skip=skip,
             limit=limit,
@@ -187,6 +212,13 @@ class TaskService:
             priority=priority_filter,
             assignee_id=assignee_id_filter,
         )
+
+        items_serialized = [
+            TaskResponse.model_validate(t).model_dump(mode="json") for t in tasks
+        ]
+        await set_cache(cache_key, {"items": items_serialized, "total": total})
+
+        return list(tasks), total, False
 
     async def update_task(
         self,
@@ -208,6 +240,7 @@ class TaskService:
 
         updated_task = await self.task_repo.update(db_obj=task, obj_in=task_in)
         await self.task_repo.db.commit()
+        await invalidate_project_tasks_cache(task.project_id)
         return updated_task
 
     async def delete_task(self, task_id: int, current_user: User) -> None:
@@ -219,5 +252,7 @@ class TaskService:
 
         ensure_project_writable(project)
 
+        project_id = task.project_id
         await self.task_repo.remove(id=task.id)
         await self.task_repo.db.commit()
+        await invalidate_project_tasks_cache(project_id)

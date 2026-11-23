@@ -1,6 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from taskhub.core.cache import invalidate_project_tasks_cache
 from taskhub.core.enums import WorkspaceRole
 from taskhub.core.exceptions import (
     FieldCannotBeNullError,
@@ -217,6 +218,7 @@ class LabelService:
         try:
             await self.label_repo.attach_to_task(task_id, label_id)
             await self.db.commit()
+            await invalidate_project_tasks_cache(task.project_id)
             return label
         except IntegrityError:
             await self.db.rollback()
@@ -245,4 +247,5 @@ class LabelService:
             raise LabelNotAttachedError()
 
         await self.db.commit()
+        await invalidate_project_tasks_cache(task.project_id)
         return True
